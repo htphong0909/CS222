@@ -8,18 +8,54 @@
 % ----------------------------------------------------------------------------
 % SLIDE: TỔNG QUAN HỌC TĂNG CƯỜNG (RL)
 % ----------------------------------------------------------------------------
-\begin{frame}{Tổng quan về Học tăng cường (RL)}
-  \lead{Khung làm việc tương tác giữa tác tử và môi trường (Sutton \& Barto, 2018).}
-  \subhead{Các thành phần cốt lõi của RL trong mô hình ngôn ngữ}
+\begin{frame}{Học tăng cường (RL): đánh giá câu trả lời của mô hình}
+  \lead{Chu trình phản hồi đóng: sinh câu trả lời, định giá và tối ưu hóa chính sách.}
+
+  \subhead{Bức tranh tổng thể}
+  \vspace{0.10cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        % 1. Mô hình pi_theta
+        \node[trainmodel, text width=3.4cm, minimum height=1.25cm] (policy) at (0, 0) {
+          \textbf{Mô hình Policy $\pi_\theta$}\\[2pt]
+          \normalfont\scriptsize Sinh câu trả lời
+        };
+
+        % 2. Mô hình đánh giá
+        \node[rewardbox, text width=3.4cm, minimum height=1.25cm] (eval) at (5.3, 0) {
+          \textbf{Mô hình đánh giá}\\[2pt]
+          \normalfont\scriptsize (Reward Model / Verifier)
+        };
+
+        % 3. Điểm số
+        \node[data, text width=2.8cm, minimum height=1.25cm] (score) at (10.4, 0) {
+          \textbf{Điểm số}\\[2pt]
+          \normalfont\scriptsize Thưởng / Phạt $r(x, y)$
+        };
+
+        % 4. Biến đổi điểm số
+        \node[lossbox, text width=4.0cm, minimum height=1.15cm] (trans) at (5.3, -1.9) {
+          \textbf{Biến đổi điểm số}\\[2pt]
+          \normalfont\scriptsize Tính toán Advantage / Loss
+        };
+
+        % Forward flows
+        \draw[flow] (policy.east) -- node[above, font=\scriptsize\rmfamily] {$(y \mid x)$} (eval.west);
+        \draw[flow] (eval.east) -- node[above, font=\scriptsize\rmfamily] {Điểm số} (score.west);
+
+        % Feedback loop
+        \draw[flow] (score.south) |- (trans.east);
+        \draw[gradflow] (trans.west) -| node[pos=0.35, above=2pt, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Biến đổi + Truyền ngược $\nabla_\theta$} (policy.south);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.10cm}
   \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item \textbf{Agent (Tác tử):} Mô hình ngôn ngữ cần tối ưu hóa chính sách $\pi_\theta$.
-    \item \textbf{Environment (Môi trường):} Ngữ cảnh hội thoại nhận phản hồi.
-    \item \textbf{State $s_t$ \& Action $a_t$:} State là prompt và chuỗi token đã sinh $(x, y_{<t})$; Action là token tiếp theo $y_t \sim \pi_\theta(\cdot \mid s_t)$.
-    \item \textbf{Reward (Phần thưởng) $r$:} Điểm số đánh giá chất lượng toàn bộ phản hồi.
+  \begin{itemize}\setlength{\itemsep}{3pt}
+    \item \textbf{Đánh giá chuỗi toàn diện:} Khắc phục hạn chế của SFT (chỉ học từng token), mô hình đánh giá chấm điểm trên toàn bộ câu trả lời $y \sim \pi_\theta$.
+    \item \textbf{Tối ưu hóa khép kín:} Điểm số được biến đổi và lan truyền ngược để cập nhật tham số $\theta$, tăng xác suất phản hồi tốt và giảm phản hồi kém.
   \end{itemize}
-  \vspace{0.15cm}
-  \textbf{Mục tiêu:} Tối đa hóa kỳ vọng phần thưởng tích lũy $\E_{\tau \sim \pi_\theta} [R(\tau)]$.
   \par\vspace{0pt}
 \end{frame}
 
