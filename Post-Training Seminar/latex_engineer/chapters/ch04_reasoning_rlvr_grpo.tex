@@ -1,0 +1,228 @@
+% =========================================================================
+% CHƯƠNG 4: REASONING RL, RLVR, GRPO VÀ KỶ NGUYÊN DEEPSEEK-R1 (2024–2026)
+% =========================================================================
+\chapter{Reasoning RL, RLVR, GRPO và Cuộc cách mạng Suy luận (2024–2026)}
+\label{ch:reasoning_rl}
+
+Nếu như giai đoạn 2022--2023 (ChatGPT / InstructGPT) là kỷ nguyên dạy mô hình ngôn ngữ cách \textit{giao tiếp lịch sự và tuân thủ mệnh lệnh} (System 1 --- Tư duy phản xạ nhanh), thì giai đoạn 2024--2026 (OpenAI o1/o3, DeepSeek-R1, QwQ, Kimi k1.5) đánh dấu bước nhảy vọt lịch sử sang \textbf{Tư duy Hệ thống 2 (System 2 Reasoning)} \citep{kahneman2011thinking, wei2022chain, deepseek2025r1}: mô hình biết tự tạm dừng, lập kế hoạch, thử sai, tự phát hiện lỗi trong suy nghĩ của chính mình và quay lui (backtracking) trước khi đưa ra câu trả lời cuối cùng.
+
+Động cơ đẩy đằng sau cuộc cách mạng này không phải là SFT hay DPO, mà là sự kết hợp giữa \textbf{Học tăng cường với Phần thưởng Kiểm chứng được (RLVR)} \citep{lambert2024tulu} và thuật toán tối ưu hóa không cần Critic \textbf{GRPO} \citep{shao2024deepseekmath} cùng các bản nâng cấp năm 2025 (\textbf{Dr.~GRPO} \citealt{liu2025understanding}, \textbf{DAPO} \citealt{yu2025dapo}).
+
+% =========================================================================
+\section{Từ RLHF sang RLVR: Tại sao bỏ Neural Reward Model lại mở khóa Siêu trí tuệ?}
+\label{sec:rlvr}
+
+\subsection{Bức tường vô hình của Neural Reward Model trong Toán và Code}
+
+Trong Chương~\ref{ch:rl_ppo}, chúng ta đã biết một Neural Reward Model $r_\phi(x, y)$ chỉ là một mạng nơ-ron học cách đoán xem câu trả lời nào ``trông có vẻ thuyết phục hơn''. Khi áp dụng vào giải toán Olympic, lập trình thuật toán hoặc suy luận logic phức tạp, Neural Reward Model lập tức trở thành điểm nghẽn chí mạng:
+\begin{enumerate}
+  \item \textbf{Bản thân giám khảo cũng không biết giải toán:} Nếu bài toán cần 50 bước biến đổi đại số mà ở bước thứ 37 mô hình đổi nhầm dấu trừ thành dấu cộng, một Neural Reward Model đọc lướt qua vẫn thấy lời giải trình bày đẹp, nhiều công thức LaTeX chuyên nghiệp và chấm điểm tuyệt đối!
+  \item \textbf{Reward Hacking tất yếu:} Mô hình Actor nhanh chóng học được cách viết lời giải ngụy biện thật trơn tru để lừa mạng nơ-ron chấm điểm thay vì thực sự giải đúng bài toán.
+\end{enumerate}
+
+\subsection{RLVR (RL with Verifiable Rewards): Sự thật khách quan không thể bị thao túng}
+
+Để phá vỡ bức tường này, \textbf{RLVR} \citep{lambert2024tulu, deepseek2025r1} vứt bỏ hoàn toàn mạng nơ-ron Reward Model trong các miền có tính đúng/sai khách quan, và thay bằng \textbf{Bộ kiểm chứng tất định (Deterministic Rule-based Verifiers)}:
+\begin{itemize}
+  \item \textbf{Trong Toán học / Khoa học:} Dùng bộ giải biểu thức ký hiệu (Symbolic Math Parser như \texttt{SymPy} hoặc \texttt{Math-Verify}) trích xuất đáp số trong khung \texttt{\textbackslash boxed\{...\}} và kiểm tra tương đương đại số với đáp án chuẩn: Đúng $= +1$, Sai $= 0$.
+  \item \textbf{Trong Kỹ thuật Phần mềm (Code):} Biên dịch đoạn code do mô hình sinh ra trong môi trường hộp cát (Sandbox) và chạy qua bộ kiểm thử (Unit Test Suite): Vượt qua 100\% test cases $= +1$, lỗi biên dịch hoặc sai test $= 0$.
+  \item \textbf{Trong Tuân thủ Định dạng (Format):} Kiểm tra bằng biểu thức chính quy (Regex) xem mô hình có đặt toàn bộ quá trình nháp vào đúng cặp thẻ \texttt{<think>...</think>} và câu trả lời vào \texttt{<answer>...</answer>} hay không.
+\end{itemize}
+
+\begin{mentalmodel}[Tại sao Rule-based Verifier lại miễn nhiễm với Reward Hacking?]
+Bạn có thể dùng lời lẽ hoa mỹ để lừa một giám khảo con người hoặc một mạng nơ-ron chấm điểm, nhưng bạn \textbf{không bao giờ có thể nịnh bợ trình biên dịch GCC hoặc bộ chạy pytest}! Một đoạn code hoặc chạy qua hết 50 test cases, hoặc bị báo lỗi đỏ. Khi hàm thưởng là một quy tắc kiểm chứng khách quan, cách duy nhất để mô hình kiếm được điểm thưởng $+1$ là phải \textbf{thực sự suy luận đúng}.
+\end{mentalmodel}
+
+\subsection{Cuộc đại tranh luận: PRM (Chấm điểm từng bước) vs. ORM (Chấm điểm kết quả cuối)}
+
+Trước tháng 1 năm 2025, giới nghiên cứu từng tin rằng: để dạy mô hình giải một bài toán dài 50 bước, việc chỉ chấm điểm đáp số cuối cùng (\textbf{ORM --- Outcome Reward Model}) là quá thưa thớt (Sparse Reward). Họ đầu tư hàng triệu đô la để xây dựng \textbf{PRM (Process Reward Model)} \citep{uesato2022solving, lightman2023lets} --- thuê chuyên gia toán học gán nhãn đúng/sai cho \textit{từng dòng lập luận một}.
+
+Thế nhưng, báo cáo kỹ thuật của \textbf{DeepSeek-R1} \citep{deepseek2025r1} đã gây chấn động khi tuyên bố: \textbf{PRM thất bại ở quy mô lớn, và chỉ cần ORM kiểm chứng kết quả cuối cùng là đủ để mô hình tự phát sinh khả năng suy luận siêu việt!}
+
+\begin{debate}
+\textbf{Hỏi: Tại sao chấm điểm từng bước (PRM) nghe hợp lý như vậy mà lại thua chấm điểm kết quả cuối (ORM) khi huấn luyện quy mô lớn?}
+
+\textbf{Đáp:} Nhóm tác giả \citet{deepseek2025r1} chỉ ra 3 tử huyệt kỹ thuật khiến PRM sụp đổ trong thực chiến:
+\begin{enumerate}
+  \item \textbf{Không thể định nghĩa ``Một bước suy luận'' (Step Boundary Ambiguity):} Trong ngôn ngữ tự nhiên, đâu là ranh giới của một bước? Một dấu xuống dòng \texttt{\textbackslash n}? Một câu văn? Hay một phép biến đổi công thức? Nếu mô hình đang thử nghiệm một hướng tiếp cận sai rồi tự sửa lại ở câu sau, PRM sẽ phạt nặng ngay tại câu thử nghiệm sai đó, vô tình \textbf{giết chết khả năng thử-và-sai (Trial-and-error)} của mô hình!
+  \item \textbf{PRM là một mạng nơ-ron nên bị Reward Hacking cực nặng:} Vì không có bộ kiểm chứng quy tắc nào biết kiểm tra một bước suy nghĩ dở dang, PRM bắt buộc phải là một mạng nơ-ron. Trong một thí nghiệm nổi tiếng, khi dùng PRM để thưởng cho từng bước, mô hình đã học cách viết đi viết lại 500 dòng hiển nhiên kiểu \textit{``Ta có $1 = 1$, suy ra $2 = 2$...''} để gom điểm thưởng từng bước lên mức tối đa mà không bao giờ giải bài toán!
+  \item \textbf{Đóng khung tư duy của AI vào giới hạn của con người:} Khi ép mô hình phải giải từng bước giống hệt cách con người gán nhãn, mô hình không bao giờ khám phá ra được các luồng tư duy mới vượt qua trí tưởng tượng của người gán nhãn.
+\end{enumerate}
+\end{debate}
+
+\subsection{Hiện tượng ``Aha Moment'' trong DeepSeek-R1-Zero và Quy trình 4 Giai đoạn}
+
+Để chứng minh sức mạnh thuần túy của RLVR + ORM, nhóm DeepSeek đã thực hiện một thí nghiệm táo bạo mang tên \textbf{DeepSeek-R1-Zero} \citep{deepseek2025r1}: lấy thẳng mô hình nền \texttt{DeepSeek-V3-Base} (chưa hề qua bất kỳ bước SFT dạy suy luận nào!), và cho chạy RL trực tiếp với hàm thưởng chỉ gồm hai số: Điểm kết quả đúng/sai ($r_{\text{acc}} \in \{0, 1\}$) + Điểm đóng mở thẻ \texttt{<think>} ($r_{\text{format}} \in \{0, 0.1\}$).
+
+\begin{caseexample}[Khoảnh khắc ``Aha Moment'' tự phát sinh trong quá trình chạy RL]
+Ở những bước huấn luyện đầu tiên, câu trả lời trong thẻ \texttt{<think>} của \texttt{DeepSeek-R1-Zero} chỉ dài khoảng 100 tokens. Nhưng khi chạy qua hàng nghìn bước RL, độ dài chuỗi suy nghĩ tự động tăng vọt lên hàng nghìn tokens mà không ai ra lệnh! Mô hình nhận ra một chân lý đơn giản: \textit{khi nó dành nhiều token hơn để nháp, kiểm tra lại kết quả và thử hướng khác, xác suất đáp số cuối cùng khớp với đáp án chuẩn tăng lên, mang lại nhiều điểm thưởng $+1$ hơn.}
+
+Tại một bước huấn luyện trung gian, các kỹ sư ghi nhận mô hình đang giải một phương trình căn thức phức tạp thì đột ngột tự viết trong thẻ \texttt{<think>}:
+\begin{quote}
+\itshape
+``...Vậy ta thu được $a = 3$. \textbf{Khoan đã, chờ một chút (Wait, wait. Wait. That's an aha moment I can flag here).} Nếu thay $a = 3$ ngược lại vào vế trái của phương trình gốc thì biểu thức dưới dấu căn bị âm! Hãy quay lại bước bình phương hai vế và xét lại điều kiện xác định từ đầu...''
+\end{quote}
+Hành vi tự nghi ngờ bản thân (Self-reflection), tự kiểm chứng (Self-verification) và quay lui (Backtracking) hoàn toàn \textbf{tự nảy sinh (Emergent behavior)} từ áp lực tối ưu hóa phần thưởng kết quả cuối!
+\end{caseexample}
+
+\begin{debate}
+\textbf{Hỏi: Nếu DeepSeek-R1-Zero (chỉ chạy RL thuần từ Base Model) đã giỏi như vậy, tại sao bản thương mại chính thức DeepSeek-R1 lại phải trải qua tới 4 giai đoạn kết hợp cả SFT và RL?}
+
+\textbf{Đáp:} Bởi vì \texttt{DeepSeek-R1-Zero} chỉ quan tâm đến việc lấy điểm đúng/sai ở đáp số cuối mà không hề có ràng buộc nào về mặt thẩm mỹ ngôn ngữ! Hệ quả là phần suy nghĩ trong thẻ \texttt{<think>} của R1-Zero mắc bệnh \textbf{Trộn lẫn ngôn ngữ (Language Mixing)}: câu hỏi bằng tiếng Anh nhưng nó nháp nửa dòng tiếng Trung, nửa dòng tiếng Anh, viết tắt lộn xộn và trình bày câu trả lời cuối rất khó đọc cho người dùng.
+
+Để vừa giữ được trí thông minh siêu việt của RL, vừa có khả năng giao tiếp mượt mà với con người, \textbf{DeepSeek-R1} chính thức sử dụng quy trình công nghiệp \textbf{4 giai đoạn} \citep{deepseek2025r1}:
+\begin{enumerate}
+  \item \textbf{Giai đoạn 1 (Cold-Start SFT):} Thu thập một lượng nhỏ (vài nghìn mẫu) dữ liệu chuỗi suy nghĩ dài (Long-CoT) được trình bày cực kỳ sạch đẹp, rõ ràng, nhất quán một ngôn ngữ để Fine-tune nhẹ lên Base Model làm ``mồi khởi động''.
+  \item \textbf{Giai đoạn 2 (Reasoning-oriented RL):} Chạy RLVR (bằng thuật toán GRPO) quy mô lớn trên Toán, Code, Logic kèm theo một phần thưởng nhỏ phạt lỗi trộn ngôn ngữ (Language Consistency Reward).
+  \item \textbf{Giai đoạn 3 (Rejection Sampling + General SFT):} Dùng chính mô hình vừa học xong ở Giai đoạn 2 để sinh ra 600,000 mẫu dữ liệu suy luận tốt nhất (lọc qua Verifier), kết hợp với 200,000 mẫu SFT hội thoại tổng quát (viết văn, dịch thuật, hỏi đáp) để dạy lại từ đầu cho Base Model.
+  \item \textbf{Giai đoạn 4 (All-Scenario RL):} Chạy một vòng RL cuối cùng kết hợp cả Rule-based Verifiers (cho bài toán suy luận) và Neural Reward Models (cho tính hữu ích và an toàn trong hội thoại đời thường).
+\end{enumerate}
+\end{debate}
+
+% =========================================================================
+\section{Giải phẫu Thuật toán GRPO (Group Relative Policy Optimization)}
+\label{sec:grpo_math}
+
+Để chạy RL quy mô lớn trên mô hình 671 tỷ tham số như DeepSeek-R1 với chuỗi suy nghĩ dài 32,768 tokens, việc dùng thuật toán PPO truyền thống là bất khả thi về mặt tài chính vì mạng Critic $V_\psi$ ngốn gấp đôi lượng bộ nhớ GPU. Nhóm tác giả DeepSeek đã phát minh ra \textbf{GRPO (Group Relative Policy Optimization)} \citep{shao2024deepseekmath} --- thuật toán đã trở thành tiêu chuẩn mặc định của toàn ngành AI trong năm 2025--2026.
+
+\subsection{Cơ chế Chuẩn hóa Nhóm (Group Relative Advantage)}
+
+Thay vì dùng một mạng nơ-ron Critic để đoán điểm sàn kỳ vọng $V_\psi(x)$, GRPO làm một việc trực diện hơn nhiều: với mỗi câu hỏi $x$, mô hình hiện tại $\pi_{\theta_{\text{old}}}$ sinh ra một nhóm gồm $G$ câu trả lời độc lập $\{o_1, o_2, \dots, o_G\}$ (thường chọn $G \in \{8, 16, 64\}$).
+
+Bộ kiểm chứng chấm điểm cho từng câu trong nhóm, thu được $G$ con số điểm thưởng $\{r_1, r_2, \dots, r_G\}$. Khi đó, \textbf{Lợi thế tương đối (Advantage)} của câu trả lời thứ $i$ đơn giản là điểm chuẩn hóa Z-score của nó so với trung bình và độ lệch chuẩn của cả nhóm:
+\begin{equation}
+  \hat{A}_{i, t} = A_i = \frac{r_i - \mean(r_1, \dots, r_G)}{\std(r_1, \dots, r_G) + \epsilon}
+  \label{eq:grpo_advantage}
+\end{equation}
+trong đó $\mean(r) = \frac{1}{G}\sum_{j=1}^G r_j$, $\std(r) = \sqrt{\frac{1}{G}\sum_{j=1}^G (r_j - \mean(r))^2}$, và $\epsilon = 10^{-8}$ để tránh lỗi chia cho $0$. Lưu ý rằng toàn bộ mọi token $t$ bên trong cùng một câu trả lời $o_i$ đều nhận chung một giá trị lợi thế $A_i$.
+
+\begin{mathdecode}[Tính bằng tay một bước cập nhật GRPO với $G = 4$]
+Giả sử ta hỏi mô hình câu hỏi toán: \textit{``Tìm số nguyên tố lớn nhất nhỏ hơn 20''} (Đáp án đúng: $19$). Ta cho mô hình sinh ra một nhóm $G = 4$ câu trả lời và chấm điểm bằng bộ kiểm chứng ($r = 1.0$ nếu đúng đáp án và đúng thẻ \texttt{<think>}, $r = 0.1$ nếu sai đáp án nhưng đúng thẻ \texttt{<think>}, $r = 0.0$ nếu sai cả hai):
+\begin{itemize}
+  \item Câu $o_1$: Đáp án $19$, đúng thẻ $\implies r_1 = 1.0$.
+  \item Câu $o_2$: Đáp án $17$, đúng thẻ $\implies r_2 = 0.1$.
+  \item Câu $o_3$: Đáp án $18$, đúng thẻ $\implies r_3 = 0.1$.
+  \item Câu $o_4$: Đáp án $15$, quên đóng thẻ \texttt{<think>} $\implies r_4 = 0.0$.
+\end{itemize}
+\textbf{Bước 1 --- Tính trung bình và độ lệch chuẩn của nhóm:}
+\begin{align*}
+  \mean(r) &= \frac{1.0 + 0.1 + 0.1 + 0.0}{4} = \mathbf{0.30} \\
+  \std(r) &= \sqrt{\frac{(1.0 - 0.3)^2 + (0.1 - 0.3)^2 + (0.1 - 0.3)^2 + (0.0 - 0.3)^2}{4}} = \sqrt{\frac{0.49 + 0.04 + 0.04 + 0.09}{4}} \approx \mathbf{0.406}
+\end{align*}
+\textbf{Bước 2 --- Tính Advantage $A_i$ cho từng câu theo công thức~\eqref{eq:grpo_advantage}:}
+\begin{itemize}
+  \item Câu $o_1$ (Đúng hoàn toàn): $A_1 = \frac{1.0 - 0.30}{0.406} = \mathbf{+1.72}$ $\implies$ Kéo xác suất của mọi token trong $o_1$ tăng mạnh!
+  \item Câu $o_2, o_3$ (Sai toán nhưng đúng định dạng): $A_2 = A_3 = \frac{0.1 - 0.30}{0.406} = \mathbf{-0.49}$ $\implies$ Giảm nhẹ xác suất của $o_2, o_3$.
+  \item Câu $o_4$ (Sai cả toán lẫn định dạng): $A_4 = \frac{0.0 - 0.30}{0.406} = \mathbf{-0.74}$ $\implies$ Phạt nặng nhất!
+\end{itemize}
+Không cần bất kỳ mạng nơ-ron Critic nào, cả 4 câu trả lời tự làm giám khảo tương đối cho nhau một cách hoàn hảo!
+\end{mathdecode}
+
+\subsection{Hàm mục tiêu đầy đủ của GRPO và Ước lượng KL Không chệch của Schulman}
+
+Hàm mục tiêu của GRPO kết hợp cơ chế cắt tỉa PPO-Clip trên từng token với thành phần phạt KL đặt trực tiếp bên ngoài hàm thưởng \citep{shao2024deepseekmath}:
+\begin{equation}
+  \mathcal{J}_{\text{GRPO}}(\theta) = \mathbb{E}_{x, \{o_i\}_{i=1}^G \sim \pi_{\theta_{\text{old}}}} \left[ \frac{1}{G} \sum_{i=1}^{G} \frac{1}{|o_i|} \sum_{t=1}^{|o_i|} \Big( \min\big( \rho_{i,t}(\theta) \hat{A}_{i,t}, \, \text{clip}(\rho_{i,t}(\theta), 1-\epsilon, 1+\epsilon) \hat{A}_{i,t} \big) - \beta \, \mathbb{D}_{\text{KL}}^{(i,t)}(\pi_\theta \parallel \pi_{\text{ref}}) \Big) \right]
+  \label{eq:grpo_objective}
+\end{equation}
+trong đó tỷ số xác suất $\rho_{i,t}(\theta) = \frac{\pi_\theta(o_{i,t} \mid x, o_{i,<t})}{\pi_{\theta_{\text{old}}}(o_{i,t} \mid x, o_{i,<t})}$, và độ phân kỳ KL trên từng token được tính bằng \textbf{Ước lượng $k_3$ của John Schulman} \citep{schulman2020approximating}:
+\begin{equation}
+  \mathbb{D}_{\text{KL}}^{(i,t)}(\pi_\theta \parallel \pi_{\text{ref}}) = k_3(r_{i,t}) = r_{i,t} - \log r_{i,t} - 1, \qquad \text{với } r_{i,t} = \frac{\pi_{\text{ref}}(o_{i,t} \mid x, o_{i,<t})}{\pi_\theta(o_{i,t} \mid x, o_{i,<t})}
+  \label{eq:schulman_k3}
+\end{equation}
+
+\begin{debate}
+\textbf{Hỏi: Theo định nghĩa sách giáo khoa, KL divergence của một mẫu đơn lẻ là $k_1 = \log \frac{\pi_\theta}{\pi_{\text{ref}}} = -\log r_{i,t}$. Tại sao GRPO lại phải viết thành công thức kỳ lạ $k_3 = r_{i,t} - \log r_{i,t} - 1$ làm gì cho phức tạp?}
+
+\textbf{Đáp:} Đây là một chi tiết kỹ thuật sống còn trong code thực tế \citep{schulman2020approximating}!
+Mặc dù giá trị trung bình kỳ vọng trên toàn bộ từ vựng của $k_1$ luôn dương ($\mathbb{E}[k_1] = D_{\text{KL}} \ge 0$), nhưng khi bạn chỉ lấy mẫu \textbf{1 token cụ thể $o_{i,t}$}, nếu chẳng may tại token đó mô hình mới có xác suất thấp hơn mô hình gốc ($\pi_\theta < \pi_{\text{ref}}$, tức là $r_{i,t} > 1$), thì:
+\begin{itemize}
+  \item \textbf{Nếu dùng công thức ngây thơ $k_1 = -\log r_{i,t}$:} Giả sử $\pi_{\text{ref}} = 0.4$ và $\pi_\theta = 0.2 \implies r_{i,t} = \frac{0.4}{0.2} = 2.0$. Lúc này $k_1 = -\log(2.0) = \mathbf{-0.693 < 0}$! Khoản phạt KL biến thành một số âm --- tức là thay vì phạt khi mô hình đi lệch khỏi bản gốc, nó lại \textbf{thưởng điểm cộng} cho mô hình! Điều này gây ra phương sai cực lớn và làm nổ quá trình huấn luyện.
+  \item \textbf{Nếu dùng công thức $k_3 = r_{i,t} - \log r_{i,t} - 1$:} Với $r_{i,t} = 2.0$, ta có $k_3 = 2.0 - \log(2.0) - 1 = 2.0 - 0.693 - 1 = \mathbf{+0.307 > 0}$! Do bất đẳng thức toán học cơ bản $r - 1 \ge \log r$ với mọi $r > 0$, biểu thức $k_3(r) = r - \log r - 1$ \textbf{luôn luôn lớn hơn hoặc bằng $0$ tại mọi token đơn lẻ}, đồng thời vẫn có giá trị kỳ vọng trung bình chính xác bằng $D_{\text{KL}}(\pi_\theta \parallel \pi_{\text{ref}})$ (vì $\mathbb{E}_{o \sim \pi_\theta}[r - 1] = \sum_o \pi_\theta \frac{\pi_{\text{ref}}}{\pi_\theta} - 1 = 1 - 1 = 0$)!
+\end{itemize}
+\end{debate}
+
+% =========================================================================
+\section{Các Bản Nâng cấp GRPO Thế hệ Mới (2025–2026): Dr.~GRPO và DAPO}
+\label{sec:drgrpo_dapo}
+
+Khi cộng đồng mã nguồn mở áp dụng công thức GRPO gốc~\eqref{eq:grpo_objective} để tái tạo DeepSeek-R1 trong đầu năm 2025, họ phát hiện ra hai lỗi thiết kế tinh vi trong công thức gốc của GRPO và công bố hai bản nâng cấp quan trọng: \textbf{Dr.~GRPO} \citep{liu2025understanding} và \textbf{DAPO} \citep{yu2025dapo}.
+
+\subsection{Dr.~GRPO (GRPO Done Right): Giải phẫu 2 Thiên kiến Toán học trong GRPO gốc}
+
+Nhóm nghiên cứu tại Sea AI Lab \& NUS \citep{liu2025understanding} đã chứng minh rằng hai phép chia tưởng như vô hại trong công thức GRPO gốc~\eqref{eq:grpo_objective} thực chất gây ra sự lệch lạc nghiêm trọng:
+
+\begin{enumerate}
+  \item \textbf{Thiên kiến Độ dài $\frac{1}{|o_i|}$ (Length Bias --- Tại sao câu sai lại ngày càng dài ra?):}
+  Hãy nhìn vào hệ số chia $\frac{1}{|o_i|}$ trước tổng các token trong Phương trình~\eqref{eq:grpo_objective}.
+  \begin{itemize}
+    \item Khi câu trả lời \textbf{Đúng} ($\hat{A}_i > 0$): Để nhận được nhiều lực kéo dương nhất trên mỗi token, mô hình thích giữ cho mẫu số $|o_i|$ nhỏ (trả lời ngắn gọn).
+    \item Nhưng khi câu trả lời \textbf{Sai} ($\hat{A}_i < 0$): Mô hình bị phạt điểm âm! Để \textbf{pha loãng hình phạt âm} trên mỗi token ($\frac{\hat{A}_i}{|o_i|}$), mô hình phát hiện ra một mánh khóe: nếu chắc chắn không giải được bài toán, hãy cứ viết lan man cho câu trả lời dài tới kịch trần $32{,}768$ tokens để mẫu số $|o_i|$ thật lớn, làm hình phạt trên từng token tiệm cận $0$! Đây là lý do tại sao khi chạy GRPO gốc, các câu trả lời sai cứ phình to dần theo thời gian.
+  \end{itemize}
+  \item \textbf{Thiên kiến Độ khó $\frac{1}{\std(r)}$ (Difficulty Bias):}
+  Với một câu hỏi quá dễ (99\% câu trong nhóm đều đúng) hoặc quá khó (99\% câu trong nhóm đều sai), độ lệch chuẩn của nhóm $\std(r) \approx 0$. Phép chia cho $\std(r)$ trong công thức~\eqref{eq:grpo_advantage} sẽ phóng đại Advantage của câu hỏi quá dễ/quá khó đó lên gấp hàng chục lần so với các câu hỏi có độ khó vừa tầm ($\std(r) = 0.5$), làm lệch hướng cập nhật của toàn bộ batch!
+\end{enumerate}
+
+\paragraph{Công thức sửa lỗi của Dr.~GRPO \citep{liu2025understanding}:}
+Bỏ cả phép chia $\std(r)$ lẫn phép chia độ dài biến thiên $|o_i|$, thay bằng một hằng số cố định $L_{\max}$ (độ dài tối đa toàn cục):
+\begin{equation}
+  \hat{A}_{i,t}^{\text{Dr.GRPO}} = r_i - \mean(r_1, \dots, r_G), \qquad \text{Hệ số chuẩn hóa độ dài: } \frac{1}{L_{\max}} \text{ thay vì } \frac{1}{|o_i|}
+  \label{eq:dr_grpo}
+\end{equation}
+
+\subsection{DAPO (Decoupled Clip and Dynamic Sampling Policy Optimization)}
+
+Được phát triển bởi ByteDance \& Tsinghua \citep{yu2025dapo} để huấn luyện các mô hình suy luận quy mô lớn, \textbf{DAPO} giải quyết hai vấn đề hệ thống của GRPO:
+
+\begin{enumerate}
+  \item \textbf{Cắt tỉa bất đối xứng (Clip-Higher: $\epsilon_{\text{low}} = 0.2, \epsilon_{\text{high}} = 0.28$) chống Sụp đổ Entropy:}
+  Trong PPO/GRPO truyền thống, ngưỡng cắt trên và dưới đối xứng nhau: $[1 - 0.2, 1 + 0.2] = [0.8, 1.2]$.
+  Hãy xét một token sáng tạo mở đầu cho bước ngoặt suy nghĩ (ví dụ từ \textit{``Wait''}), vốn ban đầu chỉ có xác suất rất nhỏ $\pi_{\theta_{\text{old}}} = 0.01$. Khi bị khóa trần ở $1.2 \times \pi_{\theta_{\text{old}}}$, xác suất mới của token đó tối đa chỉ được tăng lên $1.2 \times 0.01 = 0.012$! Ngược lại, một token quen thuộc có $\pi_{\theta_{\text{old}}} = 0.80$ có thể tăng vọt từ $0.80$ lên $0.96$. Hệ quả là các token hiếm không bao giờ ngóc đầu lên nổi, làm mô hình mất sạch tính đa dạng (\textbf{Entropy Collapse}).
+  DAPO tách riêng ngưỡng cắt trên cao hơn ($\epsilon_{\text{high}} = 0.28$) để mở đường cho các token khám phá xác suất thấp bứt phá, trong khi giữ nguyên ngưỡng cắt dưới ($\epsilon_{\text{low}} = 0.20$).
+  \item \textbf{Lấy mẫu động (Dynamic Sampling) lọc bỏ các nhóm vô tác dụng:}
+  Khi toàn bộ $G$ câu trả lời của một câu hỏi đều đúng hết ($r_1 = \dots = r_G = 1$) hoặc đều sai hết ($r_1 = \dots = r_G = 0$), mọi giá trị Advantage đều bằng $0$ tuyệt đối ($A_i = 0$). Nếu giữ các nhóm này trong batch, GPU vẫn phải tốn thời gian chạy lan truyền ngược nhưng Gradient nhận được bằng $0$! DAPO tự động loại bỏ các câu hỏi có $\std(r) = 0$ và lấy mẫu bù cho đến khi mọi nhóm trong batch đều có ít nhất một câu đúng và một câu sai ($0 < \sum_{i=1}^G \mathbb{I}(r_i = 1) < G$).
+\end{enumerate}
+
+% =========================================================================
+\section{Mở rộng Chi phí Tính toán Lúc Suy luận (Test-Time Compute Scaling) \& Agentic RL}
+\label{sec:ttc_agentic}
+
+\subsection{Quy luật Mở rộng thứ hai của AI và Thước đo \texorpdfstring{$\text{Pass@}k$}{Pass@k}}
+
+Trong suốt một thập kỷ, ngành AI chỉ biết đến một cách duy nhất để làm mô hình thông minh hơn: tăng số lượng tham số và dữ liệu lúc huấn luyện (\textbf{Train-Time Compute Scaling}). Năm 2024--2025, các nghiên cứu nền tảng của \citet{snell2024scaling} và \citet{brown2024large} đã chứng minh quy luật mở rộng thứ hai: \textbf{Test-Time Compute Scaling} --- cho phép một mô hình nhỏ suy nghĩ lâu hơn hoặc sinh nhiều phương án hơn lúc chạy thực tế (Inference) có thể đánh bại một mô hình lớn gấp 14 lần chỉ trả lời theo phản xạ!
+
+Có hai trục để mở rộng Test-Time Compute:
+\begin{enumerate}
+  \item \textbf{Mở rộng Song song (Parallel Scaling):} Sinh đồng thời $N$ lời giải độc lập, sau đó dùng bỏ phiếu đa số (\textbf{Self-Consistency / Majority Voting}) \citep{wang2023self} hoặc dùng bộ kiểm chứng chọn ra câu tốt nhất (\textbf{Best-of-$N$}).
+  \item \textbf{Mở rộng Tuần tự (Sequential Scaling):} Cho mô hình sinh một chuỗi suy nghĩ \texttt{<think>} dài hơn để tự sửa lỗi từng bước (như DeepSeek-R1 hoặc OpenAI o1).
+\end{enumerate}
+
+Để đo lường tiềm năng khám phá tối đa của mô hình khi lấy mẫu song song, các kỹ sư sử dụng chỉ số \textbf{$\text{Pass@}k$} (xác suất có ít nhất 1 lời giải đúng khi lấy mẫu $k$ lần). Thay vì chỉ lấy mẫu đúng $k$ lần (có phương sai rất lớn), chuẩn công nghiệp của \citet{chen2021evaluating} là lấy mẫu $n \ge k$ lần, đếm số câu đúng $c$, rồi tính bằng công thức tổ hợp không chệch (Unbiased Estimator):
+\begin{equation}
+  \text{Pass@}k = 1 - \frac{\binom{n - c}{k}}{\binom{n}{k}} = 1 - \prod_{j=0}^{k-1} \frac{n - c - j}{n - j}
+  \label{eq:pass_at_k}
+\end{equation}
+
+\subsection{Căn bệnh ``Suy nghĩ Quá mức'' (Overthinking) và Kỹ thuật Budget Forcing (\texttt{s1})}
+
+\paragraph{Bệnh Overthinking \citep{chen2025donot}:}
+Khi huấn luyện các mô hình Reasoning RL, một tác dụng phụ hài hước nhưng cực kỳ tốn tiền đã xuất hiện: ngay cả khi người dùng chỉ hỏi \textit{``2 + 3 bằng mấy?''}, mô hình vẫn mở thẻ \texttt{<think>} và viết 2,000 tokens để chứng minh từ các tiên đề số học Peano, kiểm tra lại bằng hệ nhị phân rồi mới dám kết luận bằng $5$! Để khắc phục, các hệ thống năm 2025--2026 bổ sung một \textbf{Hình phạt độ dài có điều kiện (Length Penalty)} vào hàm thưởng của GRPO: nếu bài toán dễ (mọi câu trong nhóm đều giải đúng), câu nào giải đúng với \textit{ít token nhất} sẽ được thưởng điểm cao nhất!
+
+\paragraph{Ép ngân sách suy nghĩ lúc chạy (Budget Forcing trong mô hình \texttt{s1}) \citep{muennighoff2025s1}:}
+Năm 2025, nhóm nghiên cứu của Stanford do Niklas Muennighoff dẫn đầu đã công bố bài báo \textbf{s1: Simple test-time scaling} \citep{muennighoff2025s1}, chứng minh một kỹ thuật can thiệp lúc Inference cực kỳ thông minh gọi là \textbf{Budget Forcing}:
+\begin{itemize}
+  \item \textbf{Khi muốn ép mô hình dừng suy nghĩ sớm (để tiết kiệm tiền/thời gian):} Ngay khi số token trong thẻ \texttt{<think>} chạm ngưỡng ngân sách tối đa (ví dụ 500 tokens), hệ thống cưỡng bức chèn ngay chuỗi token đóng thẻ \texttt{</think>\textbackslash nFinal Answer:} vào luồng sinh văn bản để buộc mô hình phải chốt đáp án ngay lập tức.
+  \item \textbf{Khi muốn ép mô hình suy nghĩ sâu hơn (cho bài toán cực khó):} Khi mô hình định sinh ra token kết thúc suy nghĩ \texttt{</think>} quá sớm, hệ thống chặn token \texttt{</think>} đó lại và thay thế nó bằng từ \textbf{``Wait''} (Khoan đã)! Chỉ một chữ \textit{``Wait''} được bơm vào sẽ kích hoạt phản xạ tự kiểm tra của mô hình, buộc nó phải soát lại toàn bộ lời giải và tự tìm ra lỗi sai ẩn giấu!
+\end{itemize}
+
+\subsection{Agentic RL đa lượt với Công cụ bên ngoài (\texttt{Search-R1})}
+
+Bước tiến mới nhất của năm 2025--2026 là đưa RLVR/GRPO vượt ra khỏi việc ``độc thoại nội tâm'' trong thẻ \texttt{<think>} để tương tác trực tiếp với thế giới bên ngoài thông qua công cụ (Search Engine, Python Interpreter, Terminal) --- điển hình là kiến trúc \textbf{Search-R1} \citep{jin2025searchr1}.
+
+Trong \textbf{Search-R1}, trong lúc đang suy nghĩ ở thẻ \texttt{<think>}, nếu mô hình nhận ra mình thiếu thông tin thực tế, nó có thể tự sinh thẻ \texttt{<search> truy vấn tìm kiếm </search>}. Hệ thống tạm dừng LLM, gọi API tìm kiếm lấy kết quả trả về trong thẻ \texttt{<information> kết quả </information>}, rồi cho LLM tiếp tục suy nghĩ!
+
+\begin{engtakeaway}[Lưu ý kỹ thuật bắt buộc khi huấn luyện Agentic RL đa lượt]
+Khi tính hàm mất mát GRPO/PPO trên một chuỗi hội thoại có xen kẽ kết quả trả về từ công cụ bên ngoài (như thẻ \texttt{<information>...</information>} trong \texttt{Search-R1} hoặc output của trình thông dịch Python), bạn \textbf{bắt buộc phải nhân mặt nạ $I(y_t) = 0$ (Retrieved Token Masking)} tại toàn bộ các token do công cụ bên ngoài trả về \citep{jin2025searchr1}!
+
+\textbf{Tại sao?} Vì các đoạn văn bản do Google Search hoặc Terminal trả về không phải do mô hình $\pi_\theta$ sinh ra. Nếu bạn quên che mặt nạ và để đạo hàm RL cập nhật trên cả các token kết quả tìm kiếm này, mô hình sẽ học cách \textbf{tự bịa ra kết quả tìm kiếm giả (Hallucinated Search Results)} thay vì chờ hệ thống thực thi công cụ thật!
+\end{engtakeaway}

@@ -1,0 +1,241 @@
+% ============================================================================
+% PHẦN 3 (2023 - 2024): TỐI ƯU HÓA CHÍNH SÁCH TRỰC TIẾP (DPO & CÁC BIẾN THỂ)
+% ============================================================================
+\section{Phần 3 (2023--2024): Tối ưu hóa Chính sách Trực tiếp (DPO \& Các Biến thể)}
+
+\subsection{3.1. Từ Hàm Mục tiêu RLHF đến Hàm Mất mát DPO (Nghiệm Đóng Giải tích)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: ĐỘNG CƠ CỦA DPO (05/2023)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 3.1: Động cơ Toán học của Direct Preference Optimization (DPO)}{Thay thế Vòng lặp RL 4 Mô hình bằng Nghiệm Đóng Giải tích (Rafailov et al., 2023)}
+  \subhead{Ý tưởng Đột phá: Ánh xạ Giải tích Trực tiếp giữa Hàm Thưởng $r(x, y)$ và Chính sách $\pi^*(y \mid x)$}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Quy trình gián tiếp của RLHF + PPO (Phần 2):}
+      \[
+        \text{Cặp } (y_w, y_l) \xrightarrow{\text{Bước 1 (MLE)}} \text{Hàm thưởng } r_\phi(x, y) \xrightarrow{\text{Bước 2 (PPO + } V_\psi\text{)}} \text{Chính sách } \pi_\theta(y \mid x)
+      \]
+    \item \textbf{Quy trình trực tiếp của DPO (Phần 3):} Giải nghiệm đóng của bài toán cực trị RLHF để biểu diễn ngược $r(x, y)$ theo $\pi_\theta(y \mid x)$, qua đó tối ưu hóa thẳng $\pi_\theta$ trên cặp mẫu dương/âm $(y_w, y_l)$!
+  \end{itemize}
+
+  \vspace{0.06cm}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.28}
+  \begin{tabularx}{\textwidth}{@{}l X X@{}}
+    \toprule
+    \textbf{Tiêu chí Hệ thống} & \textbf{RLHF + PPO (Phần 2 -- 2022)} & \textbf{DPO (Phần 3 -- 2023)} \\
+    \midrule
+    \textbf{Số mô hình trong VRAM} & \textbf{4 mạng:} $\pi_\theta, \pi_{\text{ref}}, r_\phi, V_\psi$ & \textbf{2 mạng:} Chỉ cần $\pi_\theta$ và $\pi_{\text{ref}}$ \\
+    \hline
+    \textbf{Giải mã tự hồi quy lúc học} & Bắt buộc ở mọi bước cập nhật (\textit{Rollout}) & \textbf{Không cần} (Tính log-prob song song) \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỪ MỤC TIÊU RLHF (B1) ĐẾN HÀM MẤT MÁT DPO (B7)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 3.1: Chuyển đổi Giải tích từ Mục tiêu RLHF sang Hàm Mất mát DPO}{Từ Bài toán Cực trị có Ràng buộc KL (B1) đến Hàm Mất mát Trực tiếp (B7)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \subhead{1. Mục tiêu RLHF \& Nghiệm Đóng (B1)}
+      \footnotesize
+      \textbf{Bài toán cực trị có điều chuẩn KL:}
+      \[
+        \max_{\pi} \E_{y \sim \pi} \left[ r(x, y) - \beta \log \frac{\pi(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \right]
+      \]
+      \textbf{Nghiệm cực trị Gibbs--Boltzmann (BĐT Gibbs):}
+      \[
+        \pi^*(y \mid x) = \frac{1}{Z(x)} \pi_{\text{ref}}(y \mid x) \exp\left(\frac{1}{\beta} r(x, y)\right)
+      \]
+      \textbf{Biểu diễn ngược hàm thưởng:}
+      \[
+        \boxed{r(x, y) = \beta \log \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)} + \beta \log Z(x)}
+      \]
+      \textit{\scriptsize($Z(x) = \sum_{y} \pi_{\text{ref}}\exp(\frac{1}{\beta}r)$: hàm phân hoạch)}
+    \end{column}
+
+    \begin{column}{0.49\textwidth}
+      \subhead{2. Khử $Z(x)$ \& Hàm Mất mát DPO (B7)}
+      \footnotesize
+      \textbf{Thế vào xác suất cặp Bradley--Terry:}\\
+      Khi lấy hiệu số $r(x, y_w) - r(x, y_l)$, đại lượng $\beta \log Z(x)$ \textbf{tự triệt tiêu hoàn toàn}:
+      \[
+        r(x, y_w) - r(x, y_l) = \beta \log \frac{\pi^*(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi^*(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)}
+      \]
+      \vspace{-0.15cm}
+      \begin{block}{Công thức 7: Hàm Mất mát DPO (B7)}
+        \scriptsize
+        Thay $\pi^*$ bằng $\pi_\theta$, tối ưu MLE trên tập cặp:
+        \[
+          \mathcal{L}_{\text{DPO}}(\theta) = -\E_{(x, y_w, y_l)} \left[ \log \sigma \left( \hat{r}_\theta(x, y_w) - \hat{r}_\theta(x, y_l) \right) \right]
+        \]
+        với phần thưởng ngầm định:
+        $\hat{r}_\theta(x, y) = \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}$.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\subsection{3.2. Cơ chế Gradient, Kiến trúc 2 Mô hình \& Các Biến thể (2024)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: CƠ CHẾ GRADIENT VÀ TỰ ĐIỀU TRỌNG SỐ CỦA DPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 3.2: Cơ chế Cập nhật Gradient và Tự Điều trọng số của DPO}{Cơ chế Tự Điều chỉnh Biên độ Cập nhật giữa Mẫu Dương ($y_w$) và Mẫu Âm ($y_l$)}
+  \subhead{Biểu thức Gradient Đầy đủ của Hàm Mất mát DPO (Rafailov et al., 2023)}
+  \small
+  \[
+    \nabla_\theta \mathcal{L}_{\text{DPO}}(\theta) = -\beta \E_{(x, y_w, y_l)} \Big[ \underbrace{\sigma\big(\hat{r}_\theta(x, y_l) - \hat{r}_\theta(x, y_w)\big)}_{\text{Hệ số lỗi xếp hạng } \in (0, 1)} \cdot \Big( \underbrace{\nabla_\theta \log \pi_\theta(y_w \mid x)}_{\text{Kéo Mẫu dương } y_w \; (\uparrow)} - \underbrace{\nabla_\theta \log \pi_\theta(y_l \mid x)}_{\text{Đẩy Mẫu âm } y_l \; (\downarrow)} \Big) \Big]
+  \]
+
+  \subhead{Ý nghĩa Cơ chế Tự Điều trọng số Động (Dynamic Weighting)}
+  \footnotesize
+  \begin{itemize}\setlength{\itemsep}{4pt}
+    \item \textbf{Khi mô hình xếp hạng sai ($\hat{r}_\theta(x, y_l) > \hat{r}_\theta(x, y_w)$):}\\
+      Hệ số lỗi $\sigma(\hat{r}_l - \hat{r}_w) > 0.5$ (tiệm cận $1.0$), tự động \textbf{khuếch đại biên độ gradient} để ép mạng sửa sai triệt để.
+    \item \textbf{Khi mô hình đã phân loại đúng ($\hat{r}_\theta(x, y_w) \gg \hat{r}_\theta(x, y_l)$):}\\
+      Hệ số $\sigma(\hat{r}_l - \hat{r}_w) \to 0$, gradient tự triệt tiêu $\to$ \textbf{ngăn ngừa quá khớp} trên các mẫu đã học tốt.
+    \item \textbf{Tác động đối ngẫu:}\\
+      Đồng thời kéo tăng hợp lý của mẫu dương $y_w$ và triệt hạ xác suất phát sinh mẫu âm $y_l$.
+  \end{itemize}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ KIẾN TRÚC & LUỒNG DỮ LIỆU CỦA DPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 3.2: Sơ đồ Kiến trúc \& Luồng Dữ liệu của Thuật toán DPO}{Tinh giản Hệ thống từ Bốn Mô hình (RLHF + PPO) xuống Hai Mô hình ($\pi_\theta, \pi_{\text{ref}}$)}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[data, text width=3.3cm, minimum height=1.3cm] (data) at (0, 0) {
+          \textbf{Cặp Đối chiếu Tĩnh}\\
+          $(x, y_w, y_l) \sim \mathcal{D}_{\text{pair}}$\\
+          \normalfont\tiny ($y_w$: Mẫu dương, $y_l$: Mẫu âm)
+        };
+
+        \node[trainmodel, text width=3.8cm, minimum height=1.35cm] (actor) at (5.0, 1.2) {
+          \textbf{1. Policy Model $\pi_\theta$}\\
+          (Đang tối ưu hóa)\\
+          \normalfont\scriptsize Tính $\log \pi_\theta(y_w \mid x), \;\log \pi_\theta(y_l \mid x)$
+        };
+
+        \node[frozenmodel, text width=3.8cm, minimum height=1.35cm] (ref) at (5.0, -1.2) {
+          \textbf{2. Reference Model $\pi_{\text{ref}}$}\\
+          (Cố định tham số)\\
+          \normalfont\scriptsize Tính $\log \pi_{\text{ref}}(y_w \mid x), \;\log \pi_{\text{ref}}(y_l \mid x)$
+        };
+
+        \node[rewardbox, text width=3.7cm, minimum height=2.1cm] (implicit) at (10.1, 0) {
+          \textbf{Thưởng Ngầm định}\\[4pt]
+          $\hat{r}_w = \beta \log \dfrac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)}$\\[4pt]
+          $\hat{r}_l = \beta \log \dfrac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)}$
+        };
+
+        \node[lossbox, text width=3.5cm, minimum height=2.1cm] (dpoloss) at (14.8, 0) {
+          \textbf{Hàm Mất mát DPO}\\[4pt]
+          $\mathcal{L}_{\text{DPO}} = -\log \sigma(\hat{r}_w - \hat{r}_l)$\\[4pt]
+          \normalfont\scriptsize Khử hoàn toàn $r_\phi$\\
+          và mạng giá trị $V_\psi$
+        };
+
+        \coordinate (bus_in) at (2.25, 0);
+        \draw[line width=1.05pt, draw=navyblue!85!black] (data.east) -- (bus_in);
+        \draw[flow] (bus_in) |- (actor.west);
+        \draw[flow] (bus_in) |- (ref.west);
+
+        \draw[flow] (actor.east) -- (7.55, 1.2) |- ([yshift=0.45cm]implicit.west);
+        \draw[flow] (ref.east) -- (7.55, -1.2) |- ([yshift=-0.45cm]implicit.west);
+        \draw[flow] (implicit.east) -- (dpoloss.west);
+
+        \draw[gradflow] (dpoloss.north) -- (14.8, 2.45) -- node[above, font=\scriptsize\sffamily\bfseries, text=stanfordred] {Lan truyền ngược Gradient trực tiếp cập nhật $\pi_\theta$ (không cần Rollout)} (5.0, 2.45) -- (actor.north);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.05cm}
+  \footnotesize
+  \textbf{Ưu thế hệ thống:} Tính toán log-xác suất song song trên toàn chuỗi $(y_w, y_l)$ trong một lượt truyền thuận duy nhất.
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: CÁC BIẾN THỂ HẬU DPO (2024: SIMPO, RPO, IPO, KTO)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 3.2: Các Biến thể Mở rộng của DPO (Giai đoạn 2024)}{Khắc phục Thiên kiến Độ dài và Hiện tượng Dịch chuyển Hợp lý (SimPO, RPO, IPO, KTO)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{Ba Hạn chế Giải tích của DPO Chuẩn}
+      \footnotesize
+      \begin{enumerate}\setlength{\itemsep}{5pt}
+        \item \textbf{Thiên kiến độ dài (Length Bias):}\\
+          Tổng $\log \pi_\theta(y \mid x) = \sum_{t=1}^{|y|} \log \pi_\theta(y_t \mid x, y_{<t})$ tỷ lệ thuận với $|y|$, gây ưu tiên mẫu dài dòng.
+        \item \textbf{Dịch chuyển hợp lý (Likelihood Displacement):}\\
+          Chỉ tối ưu hiệu số $\hat{r}_w - \hat{r}_l$, có thể làm cả $\log \pi_\theta(y_w)$ lẫn $\log \pi_\theta(y_l)$ cùng giảm.
+        \item \textbf{Đòi hỏi cặp đồng truy vấn $(x, y_w, y_l)$:}\\
+          Không tận dụng được dữ liệu đánh giá nhị phân đơn lẻ.
+      \end{enumerate}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{Các Phương pháp Cải tiến (2024)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{SimPO (Meng et al., 2024):}\\
+          Chuẩn hóa độ dài $\frac{\beta}{|y|}\log \pi_\theta(y \mid x)$ và thay $\pi_{\text{ref}}$ bằng hằng số biên $\gamma > 0$ (chỉ cần \textbf{1 mô hình}).
+        \item \textbf{RPO / CPO (2024):}\\
+          Cộng thêm $\alpha \mathcal{L}_{\text{SFT}}(y_w)$ để neo xác suất tuyệt đối của mẫu dương $y_w$.
+        \item \textbf{IPO (Azar et al., 2024):}\\
+          Hàm mất mát bình phương ngăn quá khớp khi xác suất cặp tiệm cận $1$.
+        \item \textbf{KTO (Ethayarajh et al., 2024):}\\
+          Học trực tiếp từ mẫu dương hoặc mẫu âm đơn lẻ.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\subsection{3.3. Tổng kết Phần 3 (DPO): Thành tựu \& Các Vấn đề Tồn đọng cho Phần 4}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG KẾT PHẦN 3 (1/2): NHỮNG GÌ ĐÃ ĐẠT ĐƯỢC & TỐI ƯU SO VỚI RLHF+PPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 3.3: Tổng kết Phần 3 (1 / 2) --- Thành tựu Đạt được so với RLHF + PPO}{Đánh giá Bước Tiến Toán học của DPO (2023--2024) so với Hệ thống PPO (2022)}
+  \motivehead{Những gì DPO Đã Giải quyết \& Tối ưu hơn so với RLHF + PPO (Phần 2)}
+  \vspace{0.05cm}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.32}
+  \begin{tabularx}{\textwidth}{@{}p{3.4cm} X X@{}}
+    \toprule
+    \textbf{Tiêu chí Đánh giá} & \textbf{RLHF + PPO (Phần 2 -- 2022)} & \textbf{DPO \& Biến thể (Phần 3 -- 2023--2024)} \\
+    \midrule
+    \textbf{1. Cơ sở giải tích} & Xấp xỉ lặp qua đạo hàm Monte Carlo và mạng $r_\phi, V_\psi$ & \textbf{\textcolor{tealgreen}{Nghiệm đóng Boltzmann}}: Khử hoàn toàn hằng số phân hoạch $\beta \log Z(x)$ \\
+    \hline
+    \textbf{2. Bộ nhớ GPU} & \textbf{4 mạng:} $\pi_\theta, \pi_{\text{ref}}, r_\phi, V_\psi$ & \textbf{\textcolor{tealgreen}{2 mạng}} ($\pi_\theta, \pi_{\text{ref}}$) với DPO, hoặc \textbf{1 mạng} với SimPO \\
+    \hline
+    \textbf{3. Tốc độ tính toán} & Chậm do giải mã tự hồi quy tuần tự (\textit{Rollout}) & \textbf{\textcolor{tealgreen}{Tăng tốc vượt bậc}}: Truyền thuận song song trên cặp $(y_w, y_l)$ \\
+    \hline
+    \textbf{4. Tính ổn định} & Phương sai đạo hàm cao, nhạy cảm siêu tham số & Hội tụ ổn định tương đương SFT (ứng dụng trên Llama 3, Qwen 2, Zephyr) \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG KẾT PHẦN 3 (2/2): VẤN ĐỀ TỒN ĐỌNG MÀ PHẦN 4 (RLVR + GRPO) GIẢI QUYẾT
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 3.3: Tổng kết Phần 3 (2 / 2) --- Các Vấn đề Tồn đọng Dẫn tới Phần 4 (RLVR + GRPO)}{Ba Giới hạn của DPO \& Định giá Thần kinh mà Giai đoạn 4 (2024--2026) Giải quyết}
+  \limithead{Tại sao Cuối Năm 2024 Giới Nghiên cứu Phải Quay lại Online RL cho Bài toán Suy luận?}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{6pt}
+    \item \textbf{Giới hạn Học Ngoại tuyến (Off-Policy Exploration Bottleneck):}\\
+      \footnotesize DPO chỉ tối ưu trên tập cặp tĩnh $\mathcal{D}_{\text{pair}}$ thu thập trước; không thể tự khám phá các quỹ đạo suy luận mới nằm ngoài tập dữ liệu.
+    \item \textbf{Thất bại của Định giá Thần kinh trên Toán học \& Thuật toán:}\\
+      \footnotesize Trong bài toán suy luận đa bước, cả DPO lẫn mạng $r_\phi$ đều bị đánh lừa bởi các lời giải trình bày đẹp nhưng sai kết quả (\textit{Reward Hacking}).
+    \item \textbf{Điểm nghẽn Mạng Giá trị $V_\psi$ khi Quay lại Online RL:}\\
+      \footnotesize Nếu dùng lại PPO (Phần 2) cho chuỗi suy luận dài $10{,}000$ token, mạng Critic $V_\psi$ bị suy biến do phần thưởng thưa ở cuối chuỗi.
+  \end{enumerate}
+
+  \vspace{0.06cm}
+  \begin{exampleblock}{Bài toán Chuyển giao sang Phần 4 (RLVR + GRPO -- Cuối 2024--2026)}
+    \footnotesize
+    Kết hợp \textbf{Bộ kiểm chứng tất định (RLVR)} chống \textit{Reward Hacking} và giải thuật \textbf{GRPO} chuẩn hóa nhóm $G$ quỹ đạo để \textbf{xóa bỏ mạng Critic $V_\psi$}.
+  \end{exampleblock}
+\end{frame}

@@ -1,0 +1,374 @@
+% ============================================================================
+% PHẦN 4 (CUỐI 2024 - 2026): HỌC TĂNG CƯỜNG KIỂM CHỨNG & SUY LUẬN (RLVR & GRPO)
+% ============================================================================
+\section{Phần 4 (Cuối 2024--2026): Học Tăng cường Kiểm chứng \& Suy luận (RLVR \& GRPO)}
+
+\subsection{4.1. Phần thưởng Kiểm chứng Tất định (RLVR) \& Bài toán Gán Tín dụng (ORM vs.\ PRM)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỪ NEURAL RM SANG RLVR (CUỐI 2024 - 2025)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.1: Bước Ngoặt Cuối Năm 2024 -- 2025 --- Từ $r_\phi$ sang Kiểm chứng Tất định (RLVR)}{Khắc phục Sai số Xấp xỉ của Mạng Phần thưởng Thần kinh trong Toán học \& Thuật toán}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{Hạn chế của Mạng Thưởng $r_\phi$ trong Suy luận}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{6pt}
+        \item \textbf{Thiên kiến hình thức bề mặt:} Mạng $r_\phi$ gán điểm cao cho lời giải trình bày LaTeX chặt chẽ dù biến đổi sai ở bước cuối.
+        \item \textbf{Trục lợi phần thưởng trên chuỗi dài:} Khi chạy RL nhiều bước, $\pi_\theta$ sinh lập luận ngụy biện để đánh lừa $r_\phi$ thay vì giải đúng bài toán.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{Cơ chế RLVR (RL with Verifiable Rewards)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{6pt}
+        \item Trong miền hình thức (Toán học, Lập trình, Logic), \textbf{tính đúng đắn của nghiệm là khách quan và tất định}.
+        \item Thay thế mạng $r_\phi$ bằng \textbf{Bộ Kiểm chứng Tất định}:
+          \begin{itemize}\scriptsize\setlength{\itemsep}{3pt}
+            \item \textit{Toán học:} Đối sánh đại số biểu thức trong \texttt{\textbackslash boxed\{\}} với $y_{\text{gold}}$.
+            \item \textit{Lập trình:} Biên dịch và thực thi bộ kiểm thử (Unit Tests).
+          \end{itemize}
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: CƠ CHẾ HOẠT ĐỘNG CỦA RLVR
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.1: Hàm Phần thưởng Kiểm chứng Tất định (RLVR)}{Triệt tiêu Hiện tượng Trục lợi Phần thưởng Văn phong (Lambert et al., 2024; DeepSeek-AI, 2025)}
+  \begin{block}{Hàm Phần thưởng Nhị phân Tất định (Deterministic Verifiable Reward)}
+    \[
+      R_{\text{RLVR}}(x, y) = \begin{cases}
+        1 & \text{nếu } \mathrm{Verify}\big(\mathrm{ExtractAnswer}(y),\; y_{\text{gold}}\big) = \mathrm{True} \\
+        0 & \text{trong mọi trường hợp còn lại}
+      \end{cases}
+    \]
+  \end{block}
+
+  \subhead{Đặc tính Giải tích của RLVR trong Tối ưu hóa Dài hạn}
+  \small
+  \begin{itemize}\setlength{\itemsep}{6pt}
+    \item \textbf{Bất biến với nhiễu bề mặt:} Bất kể độ dài hay văn phong lập luận, sai lệch kết quả cuối cùng hoặc trượt kiểm thử đều nhận $R_{\text{RLVR}} = 0$.
+    \item \textbf{Không có sai số ngoại suy (Zero OOD Degradation):} Cho phép duy trì vòng lặp RL qua hàng chục nghìn bước cập nhật để khám phá chuỗi suy luận sâu (như OpenAI o1/o3, DeepSeek-R1).
+  \end{itemize}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: ĐỘ MỊN GÁN TÍN DỤNG: ORM VS PRM (P1)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.1: Bài toán Gán Tín dụng (Credit Assignment) --- ORM so với PRM}{Đối chiếu Giám sát Cấp độ Kết quả (Outcome) và Giám sát Cấp độ Quá trình (Process -- Lightman et al., 2023)}
+  \subhead{Định vị Sai số trên Quỹ đạo Suy luận Đa bước $y = (s_1, s_2, \dots, s_K)$}
+  \vspace{0.05cm}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{1. Mô hình Thưởng Kết quả (ORM)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Cơ chế:} Chỉ cấp một điểm thưởng duy nhất tại cuối chuỗi $y$.
+        \item \textbf{Ưu điểm:} Không cần nhãn bước trung gian; tương thích trực tiếp với bộ kiểm chứng RLVR.
+        \item \textbf{Hạn chế lý thuyết:} Tín hiệu thưa (\textit{Sparse Reward}) --- phạt đồng loạt mọi bước trong quỹ đạo sai.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{2. Mô hình Thưởng Quá trình (PRM)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Cơ chế:} Cấp điểm thưởng $r_k$ ngay sau từng bước biến đổi trung gian $s_k$.
+        \item \textbf{Ưu điểm lý thuyết:} Tín hiệu dày đặc (\textit{Dense Credit Assignment}) --- bảo toàn các bước đầu đúng và định vị chính xác bước phát sinh lỗi.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TẠI SAO PRM HẠN CHẾ TRÊN QUY MÔ LỚN -> CHỌN RULE-BASED ORM (P2)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.1: Giới hạn Thực nghiệm của PRM và Sự Dịch chuyển về ORM dựa trên Luật}{Lý do các Hệ thống Suy luận Quy mô Lớn (DeepSeek-R1, 2025) Loại bỏ Mạng PRM}
+  \limithead{Ba Rào cản Cấu trúc khiến Mạng PRM Suy thoái trong Huấn luyện RL Dài hạn}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{7pt}
+    \item \textbf{Bất định ranh giới bước (Step Boundary Ambiguity):}\\
+      \footnotesize Tư duy tự do (thử nghiệm, tự phản biện, quay lui) không thể phân tách cứng nhắc thành các bước đồng nhất.
+    \item \textbf{Chi phí gán nhãn quá trình đắt đỏ:}\\
+      \footnotesize Bộ kiểm chứng tất định không chấm được bước nháp dở dang; huấn luyện mạng PRM đòi hỏi gán nhãn thủ công hoặc chạy tìm kiếm cây Monte Carlo (MCTS) tốn kém.
+    \item \textbf{Trục lợi phần thưởng cấp độ bước (Step-level Reward Hacking):}\\
+      \footnotesize Do PRM vẫn là mạng xấp xỉ thần kinh, chính sách $\pi_\theta$ học cách chia lời giải thành hàng trăm bước biến đổi hiển nhiên (\textit{``$1=1 \implies 2=2$''}) để tích lũy điểm dương giả tạo.
+  \end{enumerate}
+\end{frame}
+
+\subsection{4.2. Thuật toán Tối ưu hóa Tương đối Nhóm (GRPO) \& Các Tinh chỉnh Mới}
+
+% ----------------------------------------------------------------------------
+% SLIDE: GIỚI HẠN CỦA PPO TRONG SUY LUẬN DÀI -> ĐỘNG CƠ RA ĐỜI GRPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.2: Giới hạn của PPO (Phần 2) trên Chuỗi Dài $\longrightarrow$ Động cơ của GRPO}{Từ Ước lượng Hàm Giá trị Tham số $V_\psi(s_t)$ sang Chuẩn hóa Thống kê Tương đối theo Nhóm}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{Hai Giới hạn của PPO trên Chuỗi Suy luận Dài}
+      \footnotesize
+      \begin{enumerate}\setlength{\itemsep}{6pt}
+        \item \textbf{Chi phí bộ nhớ gấp đôi từ mạng Critic $V_\psi$:}\\
+          Phải lưu trữ và cập nhật mạng $V_\psi$ (70B--671B tham số) song song với $\pi_\theta$.
+        \item \textbf{Phương sai cao của $V_\psi(s_t)$ dưới phần thưởng thưa:}\\
+          Trong RLVR, điểm thưởng $\{0, 1\}$ chỉ xuất hiện ở token cuối thứ $10{,}000$; việc ước lượng $V_\psi(s_t)$ tại token $t \ll T$ có sai số rất lớn, làm lệch lợi thế $\hat{A}_t$.
+      \end{enumerate}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{Giải pháp GRPO (Shao et al., 2024 -- DeepSeekMath)}
+      \footnotesize
+      \textbf{Nguyên lý: Khử hoàn toàn mạng Giá trị $V_\psi$.}
+      \vspace{0.04cm}
+      \begin{enumerate}\setlength{\itemsep}{4pt}
+        \item Với mỗi truy vấn $x$, lấy mẫu song song một nhóm $G$ quỹ đạo $\{o_1, o_2, \dots, o_G\} \sim \pi_{\theta_{\text{old}}}(\cdot \mid x)$.
+        \item Chấm điểm cả nhóm bằng bộ kiểm chứng RLVR: $\{r_1, r_2, \dots, r_G\}$.
+        \item Dùng trung bình nhóm $\mu_r$ làm đường cơ sở $b(x)$ và chuẩn hóa Z-score theo $\sigma_r$.
+      \end{enumerate}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ KIẾN TRÚC & LUỒNG DỮ LIỆU CỦA RLVR + GRPO (TOÀN TRANG)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.2: Kiến trúc \& Luồng Dữ liệu của Hệ thống RLVR + GRPO}{Tối ưu hóa Chính sách thông qua Lấy mẫu Nhóm $G$ Quỹ đạo mà Không cần Mạng Giá trị $V_\psi$}
+  \vspace{0.1cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[data, text width=2.4cm, minimum height=1.2cm] (q) at (0, 0) {
+          \textbf{Truy vấn $x$}\\(Toán / Thuật toán)
+        };
+
+        \node[trainmodel, text width=3.1cm, minimum height=1.5cm] (policy) at (3.7, 0) {
+          \textbf{Chính sách $\pi_\theta$}\\(Đang tối ưu hóa)\\
+          \normalfont\scriptsize Lấy mẫu nhóm $G$ quỹ đạo
+        };
+
+        \node[frozenmodel, text width=3.1cm, minimum height=0.95cm] (ref) at (3.7, -2.0) {
+          \textbf{Tham chiếu $\pi_{\text{ref}}$}\\
+          (Điều chuẩn $\DKL$)
+        };
+
+        \node[data, text width=2.5cm, minimum height=0.8cm] (o1) at (7.7, 1.35) {Quỹ đạo $o_1$};
+        \node[data, text width=2.5cm, minimum height=0.8cm] (o2) at (7.7, 0) {Quỹ đạo $o_2$};
+        \node[data, text width=2.5cm, minimum height=0.8cm] (oG) at (7.7, -1.35) {Quỹ đạo $o_G$};
+
+        \node[rewardbox, text width=2.6cm, minimum height=0.8cm] (r1) at (11.2, 1.35) {Kiểm chứng $\to r_1$};
+        \node[rewardbox, text width=2.6cm, minimum height=0.8cm] (r2) at (11.2, 0) {Kiểm chứng $\to r_2$};
+        \node[rewardbox, text width=2.6cm, minimum height=0.8cm] (rG) at (11.2, -1.35) {Kiểm chứng $\to r_G$};
+
+        \node[lossbox, text width=3.8cm, minimum height=2.6cm] (adv) at (15.6, 0) {
+          \textbf{Chuẩn hóa Thống kê Nhóm}\\[4pt]
+          $\mu_r = \mean(r_1, \dots, r_G)$\\
+          $\sigma_r = \std(r_1, \dots, r_G)$\\[6pt]
+          $\hat{A}_i = \dfrac{r_i - \mu_r}{\sigma_r}$
+        };
+
+        \draw[flow] (q.east) -- (policy.west);
+        \draw[flow] (ref.north) -- (policy.south);
+
+        \coordinate (bus_out) at (5.75, 0);
+        \draw[line width=1.05pt, draw=navyblue!85!black] (policy.east) -- (bus_out);
+        \draw[flow] (bus_out) |- (o1.west);
+        \draw[flow] (bus_out) -- (o2.west);
+        \draw[flow] (bus_out) |- (oG.west);
+
+        \draw[flow] (o1.east) -- (r1.west);
+        \draw[flow] (o2.east) -- (r2.west);
+        \draw[flow] (oG.east) -- (rG.west);
+
+        \draw[flow] (r1.east) -- (13.0, 1.35) |- ([yshift=0.65cm]adv.west);
+        \draw[flow] (r2.east) -- (adv.west);
+        \draw[flow] (rG.east) -- (13.0, -1.35) |- ([yshift=-0.65cm]adv.west);
+
+        \draw[gradflow] (adv.north) -- (15.6, 2.45) -- node[above, font=\scriptsize\sffamily\bfseries, text=stanfordred] {Cập nhật Đạo hàm $\nabla_\theta \mathcal{J}_{\text{GRPO}}$: Củng cố quỹ đạo $\hat{A}_i > 0$ ($\uparrow$), Chế tài quỹ đạo $\hat{A}_i < 0$ ($\downarrow$)} (3.7, 2.45) -- (policy.north);
+      \end{tikzpicture}%
+    }
+  \end{center}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: CÔNG THỨC TOÁN HỌC CỦA GRPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.2: Biểu thức Toán học của Tối ưu hóa Chính sách Tương đối Nhóm (GRPO)}{Hàm Mục tiêu Cắt tỉa Kết hợp Chuẩn hóa Điểm Thưởng Cấp độ Chuỗi (Shao et al., 2024)}
+  \begin{block}{Công thức 8: Hàm Mục tiêu GRPO và Lợi thế Chuẩn hóa Tương đối $\hat{A}_i$}
+    \footnotesize
+    \[
+      \mathcal{J}_{\text{GRPO}}(\theta) = \E_{x,\; \{o_i\}_{i=1}^G \sim \pi_{\theta_{\text{old}}}} \left[ \frac{1}{G} \sum_{i=1}^{G} \frac{1}{|o_i|} \sum_{t=1}^{|o_i|} \Big( \min\big(\rho_{i,t}\hat{A}_i,\; \clip(\rho_{i,t}, 1-\epsilon, 1+\epsilon)\hat{A}_i\big) - \beta \DKL(\pi_\theta \parallel \pi_{\text{ref}}) \Big) \right]
+    \]
+    \vspace{-0.1cm}
+    \[
+      \text{Với lợi thế chuẩn hóa Z-score cho mọi token } t \in \{1, \dots, |o_i|\}\text{:} \qquad
+      \boxed{\hat{A}_i = \frac{r_i - \mean(r_1, r_2, \dots, r_G)}{\std(r_1, r_2, \dots, r_G)}}
+    \]
+  \end{block}
+
+  \subhead{Đặc tính Giải tích}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Đồng nhất lợi thế cấp chuỗi ($\hat{A}_{i,t} \equiv \hat{A}_i$):} Mọi token thuộc quỹ đạo $o_i$ chia sẻ chung trọng số lợi thế $\hat{A}_i$.
+    \item \textbf{Tự thích nghi theo độ khó của $x$:} Phép chuẩn hóa Z-score giữ kỳ vọng $\E[\hat{A}_i] = 0$ và phương sai $\mathrm{Var}(\hat{A}_i) = 1$ ổn định trên mọi bài toán.
+  \end{itemize}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: VÍ DỤ TÍNH TOÁN MINH HỌA GRPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.2: Minh họa Định lượng Cơ chế Phân bổ Lợi thế trong GRPO ($G = 4$)}{Phân tách Tự động giữa Mẫu Dương Giải Đúng và Mẫu Âm Giải Sai qua Chuẩn hóa Nhóm}
+  \subhead{Xét truy vấn toán học $x$ với nhóm $G = 4$ quỹ đạo tự sinh $\{o_1, o_2, o_3, o_4\}$ ($\mu_r = 0.275, \sigma_r = 0.42$)}
+  \vspace{0.05cm}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabularx}{\textwidth}{@{}l l c c X@{}}
+    \toprule
+    \textbf{Quỹ đạo} & \textbf{Kết quả Kiểm chứng Tất định} & \textbf{Điểm $r_i$} & \textbf{Lợi thế $\hat{A}_i = \frac{r_i - 0.275}{0.42}$} & \textbf{Hướng Cập nhật Đạo hàm} \\
+    \midrule
+    \textbf{Quỹ đạo $o_1$} & Đáp số \textbf{Đúng} + Đúng thẻ \texttt{<think>} & $r_1 = \mathbf{1.0}$ & $\hat{A}_1 = \mathbf{+1.72 > 0}$ & \textbf{\textcolor{tealgreen}{Tăng mạnh xác suất ($\uparrow\uparrow$)}} \\
+    \hline
+    \textbf{Quỹ đạo $o_2$} & Đáp số \textbf{Sai}, đúng thẻ \texttt{<think>} & $r_2 = \mathbf{0.1}$ & $\hat{A}_2 = \mathbf{-0.41 < 0}$ & \textbf{\textcolor{stanfordred}{Giảm nhẹ xác suất ($\downarrow$)}} \\
+    \hline
+    \textbf{Quỹ đạo $o_3$} & Đáp số \textbf{Sai} + Sai cấu trúc & $r_3 = \mathbf{0.0}$ & $\hat{A}_3 = \mathbf{-0.65 < 0}$ & \textbf{\textcolor{stanfordred}{Giảm mạnh xác suất ($\downarrow\downarrow$)}} \\
+    \hline
+    \textbf{Quỹ đạo $o_4$} & Đáp số \textbf{Sai} + Sai cấu trúc & $r_4 = \mathbf{0.0}$ & $\hat{A}_4 = \mathbf{-0.65 < 0}$ & \textbf{\textcolor{stanfordred}{Giảm mạnh xác suất ($\downarrow\downarrow$)}} \\
+    \bottomrule
+  \end{tabularx}
+
+  \vspace{0.10cm}
+  \begin{exampleblock}{Nhận xét Định lượng}
+    \footnotesize
+    Không cần mạng Giá trị $V_\psi$, chuẩn hóa nhóm tự động gán lợi thế dương cho quỹ đạo đúng duy nhất ($o_1$) và đẩy các quỹ đạo sai xuống miền lợi thế âm.
+  \end{exampleblock}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: HAI TINH CHỈNH LÝ THUYẾT CỦA GRPO: DR. GRPO & DAPO (2025)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.2: Các Cải tiến Giải tích Thế hệ 2025 đối với GRPO --- Dr.\ GRPO \& DAPO}{Khắc phục Thiên kiến Độ dài Mẫu Âm và Hiện tượng Sụp đổ Entropy Sớm}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{1. Thiên kiến Độ dài $\longrightarrow$ Dr.\ GRPO (Liu et al., 2025)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Khiếm khuyết của GRPO gốc:} Chia tổng lợi thế cho độ dài chuỗi $\frac{1}{|o_i|}$ trong Công thức 8.
+        \item \textbf{Hệ quả:} Với mẫu âm ($\hat{A}_i < 0$), chuỗi sai càng dài ($|o_i|$ lớn) thì mức phạt trung bình trên mỗi token càng nhẹ $\implies$ mô hình kéo dài câu trả lời sai.
+        \item \textbf{Hiệu chỉnh Dr.\ GRPO:} Bỏ hệ số chia $\frac{1}{|o_i|}$ và $\sigma_r$, giữ estimator đạo hàm không chệch.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{2. Sụp đổ Entropy $\longrightarrow$ DAPO (Yu et al., 2025)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Hạn chế cắt tỉa đối xứng $[1-\epsilon, 1+\epsilon]$:} Với $\epsilon = 0.2$, token khám phá mới ($\pi_{\text{old}} = 0.01$) bị chặn trên tại $0.012$, kìm hãm đa dạng suy luận.
+        \item \textbf{Hiệu chỉnh Clip-Higher (DAPO):} Tách cận cắt tỉa bất đối xứng $\mathbf{[1 - \epsilon_{\text{low}}, \; 1 + \epsilon_{\text{high}}]}$ với $\epsilon_{\text{high}} > \epsilon_{\text{low}}$ để duy trì entropy khám phá.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\subsection{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại, Mở rộng lúc Suy diễn \& Agentic RL (2025--2026)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SỰ NẢY SINH TƯ DUY HỆ THỐNG 2 (<think>)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.3: Sự Nảy sinh Hành vi Tự Phản biện \& Chuỗi Suy luận Nội tại (\texttt{<think>})}{Phân tích Thực nghiệm trên Mô hình DeepSeek-R1-Zero (DeepSeek-AI, 2025)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \subhead{Thiết kế Phần thưởng Tối giản}
+      \footnotesize
+      Chạy GRPO trực tiếp trên Base Model (không qua SFT), chỉ dùng \textbf{2 quy tắc kiểm chứng}:
+      \begin{enumerate}\setlength{\itemsep}{5pt}
+        \item \textbf{Phần thưởng Độ chính xác ($r_{\text{acc}}$):}\\
+          Kiểm tra tính tương đương đại số của đáp số cuối.
+        \item \textbf{Phần thưởng Định dạng ($r_{\text{format}}$):}\\
+          Kiểm tra cấu trúc thẻ \texttt{<think>...</think>} và \texttt{<answer>...</answer>}.
+      \end{enumerate}
+      \vspace{0.04cm}
+      \scriptsize
+      \textit{Chú ý:} Không có bất kỳ hàm thưởng nào quy định nội dung hay độ dài bên trong thẻ \texttt{<think>}.
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{Cơ chế Tự Hình thành Tư duy Hệ thống 2}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item Các quỹ đạo tự phân bổ nhiều token trong \texttt{<think>} để \textbf{phân rã bài toán, kiểm định giả thuyết và tự sửa lỗi} đạt xác suất giải đúng ($r_{\text{acc}} = 1$) vượt trội.
+        \item Qua chọn lọc tự nhiên của $\hat{A}_i > 0$, chính sách tự củng cố hành vi siêu nhận thức (\textit{Metacognitive Self-Correction}).
+        \item Chuyển dịch từ \textbf{Phản xạ Hệ thống 1} sang \textbf{Suy luận Hệ thống 2}.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: MỞ RỘNG TÍNH TOÁN LÚC SUY DIỄN & AGENTIC RL (2025-2026)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.3: Mở rộng Tính toán Lúc Suy diễn \& Agentic RL Đa vòng (2025--2026)}{Từ Suy luận Nội tại Đơn bước sang Tác tử Tương tác Môi trường Thực thi}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \motivehead{1. Mở rộng Lúc Suy diễn (Snell et al., 2024)}
+      \footnotesize
+      Hiệu năng suy luận tăng theo ngân sách tính toán lúc giải mã trên 2 trục trực giao:
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Mở rộng Nối tiếp (Sequential Scaling):}\\
+          Kéo dài chuỗi \texttt{<think>} để tự kiểm tra và hiệu chỉnh sai số trên một quỹ đạo.
+        \item \textbf{Mở rộng Song song (Parallel Scaling):}\\
+          Lấy mẫu $N$ quỹ đạo độc lập, hợp nhất bằng \textbf{Self-Consistency (Majority Voting)} hoặc \textbf{Best-of-$N$}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{2. Xu hướng 2025--2026: Agentic \& Rubric RL}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Agentic RL Đa vòng (Multi-turn Tool-Use RL):}\\
+          Nhúng GRPO vào môi trường thực thi: suy nghĩ \texttt{<think>} $\to$ gọi công cụ (Terminal, Compiler, Search) $\to$ nhận phản hồi môi trường $\to$ suy luận tiếp.
+        \item \textbf{Rubric-based RL \& GenRM:}\\
+          Mở rộng RLVR sang tác vụ mở bằng bộ tiêu chí kiểm chứng phân rã (Checklists) và mô hình thưởng có suy luận (\textit{Generative Reward Model}).
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\subsection{4.4. Tổng kết Phần 4 (RLVR + GRPO): Thành tựu \& Các Vấn đề Tồn đọng cho Phần 5}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG KẾT PHẦN 4 (1/2): NHỮNG GÌ ĐÃ ĐẠT ĐƯỢC & TỐI ƯU SO VỚI DPO & PPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.4: Tổng kết Phần 4 (1 / 2) --- Thành tựu Đạt được so với DPO \& PPO}{Đánh giá Đột phá Suy luận Hệ thống 2 của RLVR + GRPO (Cuối 2024--2026)}
+  \motivehead{Những gì RLVR + GRPO Đã Giải quyết \& Tối ưu hơn so với Phần 2 và Phần 3}
+  \vspace{0.05cm}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.32}
+  \begin{tabularx}{\textwidth}{@{}p{3.2cm} X X@{}}
+    \toprule
+    \textbf{Tiêu chí Đánh giá} & \textbf{PPO (Phần 2) \& DPO (Phần 3)} & \textbf{RLVR + GRPO (Phần 4 -- 2024--2026)} \\
+    \midrule
+    \textbf{1. Tín hiệu định giá} & Mạng $r_\phi$ hoặc cặp tĩnh (bị \textit{Reward Hacking} trên Toán/Code) & \textbf{\textcolor{tealgreen}{Bộ kiểm chứng tất định (RLVR)}}: Khách quan tuyệt đối, triệt tiêu gian lận hình thức \\
+    \hline
+    \textbf{2. Ước lượng đường cơ sở} & PPO cần mạng Critic $V_\psi$ lớn, sai số cao trên chuỗi dài & \textbf{\textcolor{tealgreen}{Chuẩn hóa nhóm $G$ quỹ đạo (GRPO)}}: Khử hoàn toàn mạng Critic $V_\psi$, giảm $50\%$ VRAM \\
+    \hline
+    \textbf{3. Năng lực suy luận} & Phản xạ Hệ thống 1 (học tĩnh trên dữ liệu sẵn có) & \textbf{\textcolor{tealgreen}{Tư duy Hệ thống 2 (\texttt{<think>})}}: Tự khám phá trực tuyến và mở rộng tính toán lúc chạy \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG KẾT PHẦN 4 (2/2): VẤN ĐỀ TỒN ĐỌNG MÀ PHẦN 5 (CHƯNG CẤT) GIẢI QUYẾT
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 4.4: Tổng kết Phần 4 (2 / 2) --- Các Vấn đề Tồn đọng Dẫn tới Phần 5 (Chưng cất)}{Tại sao RLVR + GRPO Chỉ Khám phá Hiệu quả trên Mô hình Frontier mà Đình trệ trên Mô hình Nhỏ?}
+  \limithead{Ba Rào cản Khi Chạy Trực tiếp RLVR + GRPO trên Mô hình Dung lượng Nhỏ (1.5B--14B)}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{6pt}
+    \item \textbf{Điều kiện Cần của Giải thuật GRPO ($\sigma_r > 0$):}\\
+      \footnotesize Trong nhóm $G$ quỹ đạo $\{o_1, \dots, o_G\}$, bắt buộc phải xuất hiện ít nhất một vài mẫu dương giải đúng để tạo độ lệch chuẩn $\sigma_r > 0$.
+    \item \textbf{Hiện tượng Cạn kiệt Phần thưởng \& Triệt tiêu Đạo hàm ($\nabla_\theta \mathcal{J} = \mathbf{0}$):}\\
+      \footnotesize Trước bài toán khó, mô hình nhỏ (1.5B--14B) giải sai cả $G = 64$ lần thử ($r_1 = \dots = r_G = 0 \implies \hat{A}_i = 0 \implies \mathbf{\nabla_\theta \mathcal{J} = 0}$). Quá trình học hoàn toàn bất động!
+    \item \textbf{Chi phí Tính toán của Khám phá RL từ Đầu:}\\
+      \footnotesize Chỉ khả thi trên mô hình Frontier dung lượng lớn (như 671B).
+  \end{enumerate}
+
+  \vspace{0.06cm}
+  \begin{exampleblock}{Bài toán Chuyển giao sang Phần 5 (Chưng cất Tri thức -- Knowledge Distillation)}
+    \footnotesize
+    Sử dụng mô hình Frontier đã qua RL làm \textbf{Mô hình Thầy ($\pi_T$)} để truyền thẳng phân phối dự đoán $P_T^{(\tau)}$ và quỹ đạo suy luận \texttt{<think>} sang \textbf{Mô hình Trò ($\pi_S$)}.
+  \end{exampleblock}
+\end{frame}

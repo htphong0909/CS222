@@ -1,0 +1,171 @@
+\chapter{Chắt lọc Tri thức Mô hình (Model Distillation) trong Post-Training}
+\label{chap:distillation}
+
+\begin{pedagogy}
+Chương này hoàn thiện bức tranh về ba trụ cột của Post-training: \textbf{Tối ưu hóa Sở thích (Preference Alignment)}, \textbf{Học Tăng Cường Suy luận (Reasoning RL)}, và \textbf{Chắt lọc Tri thức (Model Distillation)}. Chúng ta sẽ giải thích bản chất toán học của mô hình Thầy--Trò (\textit{Teacher--Student Paradigm}), phân tích sự đối đầu kinh điển giữa Phân kỳ KL Xuôi (\textit{Forward KL}) và Phân kỳ KL Ngược (\textit{Reverse KL}) trong sinh văn bản tự hồi quy, tìm hiểu kỹ thuật chắt lọc trên chính sai lầm của học sinh (\textit{On-Policy Distillation}), và khám phá ba hình thái chuyển giao tri thức: phân phối xác suất (\textit{Logits}), chuỗi đầu ra (\textit{Sequence}) và lý giải suy luận (\textit{Rationale}).
+\end{pedagogy}
+
+% ============================================================================
+\section{Mô hình Thầy--Trò trong Post-Training: Động lực \& Khái niệm}
+\label{sec:teacher_student}
+
+Trong khi Pre-training đòi hỏi chi phí tính toán khổng lồ để hấp thụ toàn bộ kho văn bản thô của nhân loại, thì ở giai đoạn Post-training, một trong những mục tiêu thực tiễn quan trọng nhất là: \textbf{Làm thế nào để chuyển giao năng lực tư duy và hành vi chuẩn mực từ một mô hình khổng lồ (Teacher Model $\pi_{\text{Teacher}}$, ví dụ 671B tham số) sang một mô hình học sinh nhỏ gọn (Student Model $\pi_{\text{Student}}$, ví dụ 7B hoặc 8B tham số) để có thể triển khai trên các thiết bị biên?}
+
+Quy trình này gọi là \textbf{Chắt lọc Tri thức (Knowledge Distillation -- KD)} \citep{hinton2015distilling}.
+Khác với việc huấn luyện mô hình nhỏ từ đầu trên dữ liệu thô, trong Post-training, mô hình học sinh được tiếp cận trực tiếp với các tín hiệu giám sát giàu thông tin ngữ nghĩa từ mô hình giáo viên (phân phối xác suất mềm, chuỗi suy luận mẫu và khả năng tự phản biện).
+
+% ============================================================================
+\section{Hình thái 1: Chắt lọc Phân phối Xác suất (Logit Distillation) \& Nhiệt độ $\tau$}
+\label{sec:logit_distillation}
+
+Hình thái kinh điển nhất của chắt lọc tri thức xuất phát từ công trình của \citet{hinton2015distilling}.
+Tại mỗi bước thời gian $t$, xét vector trạng thái ẩn của học sinh $\mathbf{h}_t^{\text{S}}$ và của giáo viên $\mathbf{h}_t^{\text{T}}$. Lớp chiếu đầu ra sinh ra vector logits tương ứng $\mathbf{z}_t^{\text{S}} \in \mathbb{R}^{|V|}$ và $\mathbf{z}_t^{\text{T}} \in \mathbb{R}^{|V|}$.
+
+\subsection{Hàm Softmax với Tham số Nhiệt độ $\tau > 0$}
+Trong phân loại thông thường ($\tau = 1$), hàm Softmax $P(i) = \frac{\exp(z_i)}{\sum_j \exp(z_j)}$ có xu hướng dồn gần như $100\%$ khối lượng xác suất vào token có logit lớn nhất ($P(y^*) \approx 0.99$), trong khi hàng nghìn token còn lại nhận xác suất xấp xỉ $0$ ($10^{-5}$ đến $10^{-8}$).
+Tuy nhiên, trong các xác suất cực nhỏ đó ẩn chứa một kho tàng thông tin ngữ nghĩa mà \citet{hinton2015distilling} gọi là \textbf{Tri thức Ẩn (Dark Knowledge)}.
+
+\begin{example}[Tri thức Ẩn trong Phân phối Xác suất]
+Xét câu tiếng Anh: \textit{``The animal didn't cross the street because it was too \dots''}
+Token tiếp theo có xác suất cao nhất là \texttt{tired}. Nhưng trong số các token sai, giáo viên sẽ gán xác suất cho từ \texttt{scared} cao hơn gấp 10,000 lần so với từ \texttt{refrigerator}! Tỷ số tương đối giữa các token không được chọn phản ánh cấu trúc hình học ngữ nghĩa sâu sắc của không gian ngôn ngữ mà một nhãn cứng nhị phân (\textit{One-hot Label}) không bao giờ truyền tải được.
+\end{example}
+
+Để khai mở tri thức ẩn này, ta đưa vào tham số \textbf{Nhiệt độ (Temperature $\tau > 0$)}:
+\begin{equation}
+    P_\tau(x_t = i \mid x_{<t}) = \frac{\exp\big(z_i / \tau\big)}{\sum_{j=1}^{|V|} \exp\big(z_j / \tau\big)}.
+    \label{eq:softmax_temperature}
+\end{equation}
+Khi $\tau > 1$, phân phối xác suất được làm phẳng ra (\textit{softened}), nâng các xác suất tiềm ẩn lên đủ lớn để tạo ra tín hiệu gradient hữu ích cho mô hình học sinh.
+
+\begin{theorem}[Xấp xỉ Đạo hàm khi Nhiệt độ $\tau \to \infty$ \citep{hinton2015distilling}]
+Khi nhiệt độ $\tau$ đủ lớn so với độ lớn của logits ($|z_i| \ll \tau$), hàm mất mát phân kỳ KL giữa phân phối mềm của giáo viên $P_\tau^{\text{T}}$ và học sinh $P_\tau^{\text{S}}$ tương đương với hàm mất mát sai số bình phương trung bình (\textit{Mean Squared Error -- MSE}) trên các vector logits đã trừ trung bình:
+\begin{equation}
+    \lim_{\tau \to \infty} \nabla_{\mathbf{z}^{\text{S}}} \DKL\big(P_\tau^{\text{T}} \parallel P_\tau^{\text{S}}\big) \approx \frac{1}{|V|\tau^2} \big(\mathbf{z}^{\text{S}} - \mathbf{z}^{\text{T}}\big).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Khai triển chuỗi Taylor cho hàm mũ quanh $0$: $\exp(z_i / \tau) \approx 1 + \frac{z_i}{\tau}$.
+Mẫu số của hàm Softmax trở thành:
+\begin{equation}
+    \sum_{j=1}^{|V|} \exp\left(\frac{z_j}{\tau}\right) \approx \sum_{j=1}^{|V|} \left(1 + \frac{z_j}{\tau}\right) = |V| + \frac{\sum_j z_j}{\tau} = |V| \left( 1 + \frac{\bar{z}}{\tau} \right),
+\end{equation}
+với $\bar{z} = \frac{1}{|V|}\sum_{j} z_j$. Xác suất mềm được xấp xỉ bằng:
+\begin{equation}
+    P_\tau(i) \approx \frac{1 + z_i / \tau}{|V| (1 + \bar{z}/\tau)} \approx \frac{1}{|V|} \left( 1 + \frac{z_i}{\tau} \right) \left( 1 - \frac{\bar{z}}{\tau} \right) \approx \frac{1}{|V|} \left( 1 + \frac{z_i - \bar{z}}{\tau} \right).
+\end{equation}
+Đạo hàm của hàm mất mát Cross-Entropy mềm $\mathcal{L} = -\sum_i P_\tau^{\text{T}}(i) \log P_\tau^{\text{S}}(i)$ theo logit $z_i^{\text{S}}$ là:
+\begin{equation}
+    \frac{\partial \mathcal{L}}{\partial z_i^{\text{S}}} = \frac{1}{\tau} \big( P_\tau^{\text{S}}(i) - P_\tau^{\text{T}}(i) \big) \approx \frac{1}{\tau} \left[ \frac{1}{|V|} \left( 1 + \frac{z_i^{\text{S}} - \bar{z}^{\text{S}}}{\tau} \right) - \frac{1}{|V|} \left( 1 + \frac{z_i^{\text{T}} - \bar{z}^{\text{T}}}{\tau} \right) \right] = \frac{(z_i^{\text{S}} - \bar{z}^{\text{S}}) - (z_i^{\text{T}} - \bar{z}^{\text{T}})}{|V|\tau^2}.
+\end{equation}
+Nếu các vector logits đã được chuẩn hóa về trung bình bằng $0$ ($\bar{z} = 0$), đạo hàm tỷ lệ thuận trực tiếp với hiệu số sai lệch $z_i^{\text{S}} - z_i^{\text{T}}$.
+\end{proof}
+
+% ============================================================================
+\section{Cuộc Đối đầu Toán học: Forward KL (Mean-Seeking) vs. Reverse KL (Mode-Seeking)}
+\label{sec:forward_vs_reverse_kl}
+
+Trong bài toán sinh văn bản tự hồi quy của LLM, việc chọn hướng phân kỳ KL nào để khớp phân phối giữa Thầy và Trò là một câu hỏi lý thuyết sâu sắc \citep{gu2024minillm, agarwal2024onpolicy}:
+
+\subsection{1. Phân kỳ KL Xuôi (Forward KL / Zero-Avoiding / Mean-Seeking)}
+Công thức chắt lọc truyền thống tối thiểu hóa phân kỳ KL từ Giáo viên sang Học sinh:
+\begin{equation}
+    \mathcal{L}_{\text{Forward}}(\theta) = \DKL\big(P_{\text{Teacher}} \parallel P_{\text{Student}}\big) = \sum_{y} P_{\text{Teacher}}(y \mid x) \log \frac{P_{\text{Teacher}}(y \mid x)}{P_{\text{Student}}(y \mid x)}.
+    \label{eq:forward_kl_kd}
+\end{equation}
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Đặc tính Toán học:} Bất cứ nơi nào giáo viên có xác suất $P_{\text{Teacher}}(y) > 0$, nếu học sinh gán $P_{\text{Student}}(y) \to 0$, thì tỷ số $\frac{P_{\text{Teacher}}}{P_{\text{Student}}} \to +\infty \implies \DKL \to +\infty$.
+    \item \textbf{Hành vi thực tế:} Học sinh bị ép buộc phải \textbf{trải rộng khối lượng xác suất để bao phủ mọi vùng mà giáo viên có thể sinh ra} (\textit{Zero-Avoiding / Mean-Seeking}).
+    \item \textbf{Hậu quả trong LLM:} Dung lượng tham số của mô hình học sinh nhỏ hơn giáo viên rất nhiều (ví dụ 7B vs. 70B), nó không thể học được toàn bộ độ đa dạng của giáo viên. Việc ép nó bao phủ mọi mốt (\textit{modes}) khiến nó phân bổ xác suất vào cả những vùng ranh giới trống rỗng giữa các mốt, dẫn đến hiện tượng \textbf{sinh câu lủng củng, ảo giác và mất tập trung} \citep{gu2024minillm}.
+\end{itemize}
+
+\subsection{2. Phân kỳ KL Ngược (Reverse KL / Zero-Forcing / Mode-Seeking)}
+Ngược lại, nếu ta tối thiểu hóa phân kỳ KL từ Học sinh sang Giáo viên:
+\begin{equation}
+    \mathcal{L}_{\text{Reverse}}(\theta) = \DKL\big(P_{\text{Student}} \parallel P_{\text{Teacher}}\big) = \sum_{y} P_{\text{Student}}(y \mid x) \log \frac{P_{\text{Student}}(y \mid x)}{P_{\text{Teacher}}(y \mid x)}.
+    \label{eq:reverse_kl_kd}
+\end{equation}
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Đặc tính Toán học:} Tại những vùng mà giáo viên không ủng hộ ($P_{\text{Teacher}}(y) \approx 0$), để tránh $\DKL \to +\infty$, học sinh bắt buộc phải gán $P_{\text{Student}}(y) = 0$ (vì $\lim_{p \to 0} p \log p = 0$).
+    \item \textbf{Hành vi thực tế:} Học sinh sẵn sàng bỏ qua nhiều mốt phức tạp của giáo viên để \textbf{tập trung toàn bộ khối lượng xác suất vào một vài mốt chất lượng cao nhất} (\textit{Zero-Forcing / Mode-Seeking}).
+    \item \textbf{Ưu điểm vượt trội cho LLM:} Trong sinh văn bản, người dùng chỉ cần mô hình trả lời chuẩn xác và mạch lạc theo một hướng đi đúng, chứ không cần mô hình phải nhớ hết mọi cách nói lan man. Do đó, Reverse KL tạo ra các mô hình học sinh có văn phong sắc sảo, tự tin và ít ảo giác hơn hẳn!
+\end{itemize}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[scale=1.0]
+    % Teacher Bimodal Distribution
+    \draw[thick, gray, dashed] (-3,0) to[out=0, in=180] (-1.5, 2.2) to[out=0, in=180] (0, 0.5) to[out=0, in=180] (1.5, 2.2) to[out=0, in=180] (3,0);
+    \node[gray] at (0, 0.9) {$P_{\text{Teacher}}$ (Phân phối hai mốt)};
+
+    % Forward KL (Mean-seeking)
+    \draw[thick, red] (-3,0) to[out=0, in=180] (0, 1.4) to[out=0, in=180] (3,0);
+    \node[red] at (0, -0.6) {Forward KL: Trải rộng bao trùm cả vùng rỗng};
+
+    % Reverse KL (Mode-seeking)
+    \begin{scope}[shift={(6.5,0)}]
+        \draw[thick, gray, dashed] (-3,0) to[out=0, in=180] (-1.5, 2.2) to[out=0, in=180] (0, 0.5) to[out=0, in=180] (1.5, 2.2) to[out=0, in=180] (3,0);
+        \node[gray] at (0, 0.9) {$P_{\text{Teacher}}$};
+        \draw[thick, blue] (-3,0) -- (-2.8,0) to[out=0, in=180] (-1.5, 2.4) to[out=0, in=180] (-0.2,0) -- (3,0);
+        \node[blue] at (0, -0.6) {Reverse KL: Khóa chặt vào một mốt tối ưu};
+    \end{scope}
+\end{tikzpicture}
+\caption{Minh họa hành vi toán học: Forward KL (Mean-Seeking) bao trùm cả vùng xác suất rỗng vs. Reverse KL (Mode-Seeking) tập trung chính xác vào mốt tốt nhất.}
+\label{fig:forward_vs_reverse_kl}
+\end{figure}
+
+\subsection{3. Chắt lọc Trực tuyến trên Chính Sai lầm của Học sinh (On-Policy Distillation -- MiniLLM \& GKD)}
+Tuy nhiên, có một rào cản tính toán lớn: Trong Phương trình~\eqref{eq:reverse_kl_kd}, kỳ vọng được lấy theo phân phối của học sinh: $\E_{y \sim \pi_{\text{Student}}}$. Để tính đạo hàm, ta không thể dùng dữ liệu tĩnh mà phải cho học sinh tự sinh văn bản!
+
+Công trình \textbf{MiniLLM} \citep{gu2024minillm} và \textbf{GKD (Generalized Knowledge Distillation)} của Google DeepMind \citep{agarwal2024onpolicy} giải quyết vấn đề này bằng cách thiết lập thuật toán \textbf{On-Policy Distillation}:
+\begin{enumerate}[leftmargin=1.2cm]
+    \item Với câu hỏi $x$, cho chính mô hình học sinh $\pi_{\text{Student}}$ tự sinh ra câu trả lời $\hat{y} \sim \pi_{\text{Student}}(\cdot \mid x)$ (\textit{On-Policy Generation}).
+    \item Đưa câu trả lời $\hat{y}$ do học sinh tự sinh vào mô hình giáo viên $\pi_{\text{Teacher}}$ để giáo viên chấm điểm và cung cấp phân phối mục tiêu tại từng bước.
+    \item Cập nhật trọng số của học sinh bằng thuật toán Policy Gradient (giống RL) với hàm phần thưởng là log-likelihood của giáo viên:
+    \begin{equation}
+        r(x, \hat{y}) = \sum_{t=1}^{|\hat{y}|} \log \pi_{\text{Teacher}}(\hat{y}_t \mid x, \hat{y}_{<t}).
+    \end{equation}
+\end{enumerate}
+Nhờ được huấn luyện trực tiếp trên \textbf{những sai lầm do chính mình tự gây ra} (\textit{Self-generated mistakes}), mô hình học sinh loại bỏ hoàn toàn hiện tượng Exposure Bias và đạt năng lực vượt trội so với chắt lọc tĩnh truyền thống \citep{agarwal2024onpolicy}.
+
+% ============================================================================
+\section{Hình thái 2: Chắt lọc Cấp độ Chuỗi (Sequence-Level Distillation -- Kim \& Rush, 2016)}
+\label{sec:sequence_distillation}
+
+Khác với Logit Distillation (đòi hỏi phải lưu trữ và truyền tải tensor logits khổng lồ kích thước $B \times L \times |V|$ qua mạng), phương pháp \textbf{Chắt lọc Cấp độ Chuỗi (Sequence-Level Knowledge Distillation -- SeqKD)} \citep{kim2016sequence} hoạt động hoàn toàn trên không gian văn bản:
+
+\begin{definition}[Quy trình Sequence-Level Distillation]
+\begin{enumerate}[leftmargin=1.2cm]
+    \item Cho mô hình giáo viên $\pi_{\text{Teacher}}$ chạy giải mã tìm kiếm (\textit{Greedy Search} hoặc \textit{Beam Search}) trên tập câu hỏi $\{x^{(i)}\}$ để tạo ra các chuỗi phản hồi chất lượng cao nhất:
+    \begin{equation}
+        y_{\text{Teacher}}^*(x) = \argmax_{y} \pi_{\text{Teacher}}(y \mid x).
+    \end{equation}
+    \item Tạo lập tập dữ liệu chắt lọc tổng hợp: $\mathcal{D}_{\text{distill}} = \{(x^{(i)}, y_{\text{Teacher}}^*(x^{(i)}))\}$.
+    \item Huấn luyện mô hình học sinh $\pi_{\text{Student}}$ trên $\mathcal{D}_{\text{distill}}$ bằng hàm mất mát SFT có giám sát thông thường với mặt nạ Prompt Masking (Chương 1):
+    \begin{equation}
+        \mathcal{L}_{\text{SeqKD}}(\theta) = -\E_{(x, y^*) \sim \mathcal{D}_{\text{distill}}} \left[ \sum_{t=1}^{|y^*|} \log \pi_\theta(y_t^* \mid x, y_{<t}^*) \right].
+    \end{equation}
+\end{enumerate}
+\end{definition}
+
+Đây chính là phương pháp chủ đạo được Meta sử dụng để tạo ra dữ liệu tổng hợp cho dòng mô hình Llama 3 \citep{dubey2024llama}, và được DeepSeek sử dụng để chắt lọc năng lực từ DeepSeek-R1 sang các mô hình nhỏ (Qwen-1.5B/7B/14B/32B và Llama-8B/70B) \citep{deepseek2025r1}.
+
+% ============================================================================
+\section{Hình thái 3: Chắt lọc Quá trình Suy luận (Rationale / Step-by-Step Distillation)}
+\label{sec:rationale_distillation}
+
+Khi chắt lọc các bài toán suy luận phức tạp, nếu giáo viên chỉ cung cấp câu hỏi $x$ và đáp án cuối cùng $y$, mô hình học sinh nhỏ sẽ rất khó nắm bắt được bước nhảy logic.
+
+Công trình \textbf{Distilling Step-by-Step!} của Đại học Washington và Google Research \citep{hsieh2023distilling} đề xuất hình thái \textbf{Chắt lọc Quá trình Suy luận (Rationale Distillation)}:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Thay vì chỉ sinh đáp án $y$, mô hình giáo viên được yêu cầu sinh ra \textbf{Chuỗi Lý giải Nháp (Rationale $r$)} đi kèm kết quả cuối cùng: $x \to (r, y)$.
+    \item Mô hình học sinh được huấn luyện theo cơ chế \textbf{Học Đa Nhiệm vụ (Multi-task Learning)} bằng cách sử dụng hai tiền tố điều khiển:
+    \begin{align}
+        \text{Nhiệm vụ 1 (Sinh Lý giải):} \quad &\mathcal{L}_{\text{rationale}} = -\log \pi_\theta(r \mid x, \text{prefix}=\texttt{explain:}), \\
+        \text{Nhiệm vụ 2 (Dự đoán Đáp án):} \quad &\mathcal{L}_{\text{label}} = -\log \pi_\theta(y \mid x, r, \text{prefix}=\texttt{predict:}).
+    \end{align}
+    Tổng hàm mất mát: $\mathcal{L}_{\text{Step-by-Step}} = \mathcal{L}_{\text{label}} + \lambda_{\text{rat}} \mathcal{L}_{\text{rationale}}$.
+\end{itemize}
+
+\citet{hsieh2023distilling} đã chứng minh một kết quả ấn tượng: Một mô hình học sinh nhỏ gọn kích thước \textbf{770 triệu tham số (770M)} khi được chắt lọc theo phương pháp Step-by-Step có thể đánh bại mô hình khổng lồ \textbf{PaLM-540B} trên nhiều bộ đo suy luận chuẩn, trong khi chỉ cần sử dụng một lượng dữ liệu huấn luyện bằng một phần nhỏ so với SFT thông thường!
+Nghiên cứu này là tiền đề trực tiếp giải thích tại sao các mô hình học sinh nhỏ như \textit{DeepSeek-R1-Distill-Qwen-1.5B} lại sở hữu năng lực giải toán Olympic vượt trội hơn cả các mô hình 70B không qua chắt lọc suy luận \citep{deepseek2025r1}.

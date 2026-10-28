@@ -1,0 +1,405 @@
+% ============================================================================
+% PHẦN 5: CHƯNG CẤT TRI THỨC, KHÔNG GIAN THAM SỐ & TỔNG KẾT HỆ THỐNG
+% ============================================================================
+\section{Phần 5: Chưng cất Tri thức, Không gian Tham số \& Tổng kết Hệ thống}
+
+\subsection{5.1. Chưng cất Tri thức từ Mô hình Thầy Frontier sang Mô hình Trò Nhỏ (Distillation)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG QUAN PHẦN 5.1 — KHUNG THẦY-TRÒ
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.1: Lý thuyết Chưng cất Tri thức (Knowledge Distillation)}{Khắc phục Hiện tượng Triệt tiêu Đạo hàm RL trên Mô hình Nhỏ (Từ Phần 4.4)}
+  \subhead{1. Khuôn khổ Học Thầy--Trò (Hinton et al., 2015; Kim \& Rush, 2016)}
+  \small
+  Chuyển giao phân phối xác suất và quỹ đạo suy luận từ \textbf{Mô hình Thầy Frontier ($\pi_T$)} đã qua huấn luyện RL quy mô lớn sang \textbf{Mô hình Trò ($\pi_S$)} có dung lượng tham số nhỏ.
+
+  \vspace{0.10cm}
+  \motivehead{2. Ba Phương thức Biểu diễn Tri thức Chuyển giao}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{5pt}
+    \item \textbf{Chưng cất Phân phối Dự đoán (Logit / White-box KD):}\\
+      \footnotesize Đối khớp phân phối xác suất mềm $P_T^{(\tau)}(\cdot \mid s_t)$ trên toàn bộ từ điển $\mathcal{V}$ tại từng token.
+    \item \textbf{Chưng cất Chuỗi Đầu ra (Sequence-Level / Black-box KD):}\\
+      \footnotesize Tối đa hóa hợp lý logarit trên phản hồi hoàn chỉnh $y_T \sim \pi_T(\cdot \mid x)$.
+    \item \textbf{Chưng cất Quỹ đạo Suy luận (Rationale / Reasoning KD):}\\
+      \footnotesize Chuyển giao đồng thời chuỗi lập luận trung gian \texttt{<think>} $z_T$ đã kiểm chứng và kết luận $y_T$.
+  \end{enumerate}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: BẰNG CHỨNG THỰC NGHIỆM: CHƯNG CẤT VS TỰ CHẠY RL TRÊN MÔ HÌNH NHỎ
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.1: Đối chứng Thực nghiệm --- Chưng cất Tri thức so với Tự Tối ưu hóa RL}{Phân tích Hiệu năng trên Mô hình Qwen-32B-Base (DeepSeek-AI, 2025)}
+  \subhead{Thí nghiệm Đối chứng: Tự Chạy GRPO từ Đầu so với Chưng cất từ Thầy 671B}
+  \vspace{0.06cm}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.28}
+  \begin{tabularx}{\textwidth}{@{}p{4.8cm} c c X@{}}
+    \toprule
+    \textbf{Phương thức Huấn luyện trên Qwen-32B} & \textbf{AIME 2024} & \textbf{MATH-500} & \textbf{Giải thích Cơ chế Lý thuyết} \\
+    \midrule
+    \textbf{1. Tự chạy RL từ đầu (Zero-RL / GRPO $>10{,}000$ bước)} & $47.0\%$ & $83.9\%$ & Bị giới hạn bởi dung lượng khám phá tiên nghiệm của mạng 32B \\
+    \hline
+    \textbf{2. Chưng cất Suy luận từ Thầy DeepSeek-R1 671B} & \textbf{\textcolor{tealgreen}{72.6\%}} & \textbf{\textcolor{tealgreen}{94.3\%}} & \textbf{Vượt trội $+25.6\%$} nhờ kế thừa trực tiếp quỹ đạo suy luận của Thầy 671B \\
+    \bottomrule
+  \end{tabularx}
+
+  \vspace{0.12cm}
+  \begin{exampleblock}{Phân công Chiến lược trong Hệ sinh thái Hậu Huấn luyện}
+    \footnotesize
+    Dùng \textbf{Online RL (RLVR + GRPO)} trên mô hình Frontier để \textbf{khám phá tri thức suy luận mới}; dùng \textbf{Chưng cất Quỹ đạo Suy luận} để nén năng lực đó xuống mô hình nhỏ.
+  \end{exampleblock}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ BA HÌNH THỨC CHUYỂN GIAO TRI THỨC TRONG CHƯNG CẤT (TOÀN TRANG)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.1: Kiến trúc \& Luồng Dữ liệu của Ba Phương thức Chưng cất Tri thức}{So sánh Luồng Tín hiệu Huấn luyện giữa Chưng cất Hộp Trắng (White-box) và Hộp Đen (Black-box)}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[frozenmodel, text width=3.3cm, minimum height=2.9cm, fill=softblue, draw=navyblue, line width=1.1pt] (teacher) at (0, 0) {
+          \textbf{Mô hình Thầy $\pi_T$}\\
+          (Frontier Teacher)\\[6pt]
+          \normalfont\scriptsize Đã qua Pre-training,\\
+          SFT \& RL (GRPO)\\
+          (Ví dụ: 671B tham số)
+        };
+
+        \node[rewardbox, text width=5.6cm, minimum height=1.05cm] (k1) at (6.4, 1.5) {
+          \textbf{1. Chưng cất Phân phối Dự đoán (Logit / White-box KD)}\\
+          \normalfont\scriptsize Chuyển giao phân phối mềm $P_T^{(\tau)}(v \mid x, y_{<t})$ trên toàn bộ từ điển $\mathcal{V}$
+        };
+
+        \node[data, text width=5.6cm, minimum height=1.05cm] (k2) at (6.4, 0) {
+          \textbf{2. Chưng cất Chuỗi Đầu ra (Sequence / Black-box KD)}\\
+          \normalfont\scriptsize Chuyển giao phản hồi hoàn chỉnh $y_T \sim \pi_T(\cdot \mid x)$ làm chuỗi mục tiêu
+        };
+
+        \node[lossbox, text width=5.6cm, minimum height=1.05cm, fill=softgreen, draw=tealgreen] (k3) at (6.4, -1.5) {
+          \textbf{3. Chưng cất Quỹ đạo Suy luận (Rationale / Reasoning KD)}\\
+          \normalfont\scriptsize Chuyển giao đồng thời chuỗi suy luận $z_T$ (\texttt{<think>}) và đáp án $y_T$ đã kiểm chứng
+        };
+
+        \node[trainmodel, text width=3.3cm, minimum height=2.9cm] (student) at (12.8, 0) {
+          \textbf{Mô hình Trò $\pi_S$}\\
+          (Student Model)\\[6pt]
+          \normalfont\scriptsize Dung lượng nhỏ gọn,\\
+          tối ưu hóa độ trễ\\
+          (Ví dụ: 1.5B -- 32B)
+        };
+
+        \coordinate (bus_left) at (2.4, 0);
+        \draw[line width=1.05pt, draw=navyblue!85!black] (teacher.east) -- (bus_left);
+        \draw[flow] (bus_left) |- (k1.west);
+        \draw[flow] (bus_left) -- (k2.west);
+        \draw[flow] (bus_left) |- (k3.west);
+
+        \draw[flow] (k1.east) -- (10.4, 1.5) |- ([yshift=0.7cm]student.west);
+        \draw[flow] (k2.east) -- (student.west);
+        \draw[flow] (k3.east) -- (10.4, -1.5) |- ([yshift=-0.7cm]student.west);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.05cm}
+  \footnotesize
+  \textbf{Điều kiện kỹ thuật:} Phương thức 1 đòi hỏi cùng bộ từ vựng $\mathcal{V}$ và truy cập vector logit (\textit{White-box}); Phương thức 2 \& 3 chỉ dùng văn bản đầu ra nên áp dụng được cho mọi cặp mô hình (\textit{Black-box}).
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: PHƯƠNG THỨC 1 — CHƯNG CẤT DỰ ĐOÁN (LOGIT KD) & NHIỆT ĐỘ TAU
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.1: Phương thức 1 --- Chưng cất Phân phối Dự đoán (Logit Distillation)}{Biểu thức Softmax Nhiệt độ $\tau$ và Cấu trúc Tương đồng Ngữ nghĩa Nội tại (Hinton et al., 2015)}
+  \begin{block}{Công thức 9: Phân phối Softmax Nhiệt độ $\tau$ và Hàm Mục tiêu Logit KD}
+    \[
+      P^{(\tau)}(v_k \mid s_t) = \frac{\exp(z_k / \tau)}{\sum_{j=1}^{|\mathcal{V}|} \exp(z_j / \tau)}, \qquad
+      \mathcal{L}_{\text{Logit-KD}}(\theta_S) = \tau^2 \, \DKL\Big( P_T^{(\tau)}(\cdot \mid s_t) \;\Big\|\; P_S^{(\tau)}(\cdot \mid s_t) \Big)
+    \]
+  \end{block}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.50\textwidth}
+      \motivehead{Cấu trúc Tương quan Ngữ nghĩa (Dark Knowledge)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{4pt}
+        \item Nhãn cứng (One-hot) chỉ gán xác suất $1$ cho 1 từ và $0$ cho $|\mathcal{V}|-1$ từ còn lại.
+        \item Phân phối mềm $P_T^{(\tau)}$ (ví dụ: \textit{``mèo''}: $0.70$, \textit{``chó''}: $0.25$, \textit{``tủ lạnh''}: $10^{-8}$) truyền tải \textbf{cấu trúc hình học tương đồng giữa các khái niệm}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \subhead{Vai trò của Nhiệt độ $\tau > 1$ và Hệ số $\tau^2$}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{4pt}
+        \item \textbf{Chia cho $\tau > 1$:} Làm phẳng phân phối Softmax, nâng xác suất vùng đuôi để Trò tiếp nhận rõ cấu trúc tương quan.
+        \item \textbf{Nhân với $\tau^2$:} Bù lại sự suy giảm biên độ đạo hàm $\nabla_{z_S}\DKL \propto 1/\tau^2$.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: PHƯƠNG THỨC 2 & 3 — SEQUENCE KD VS RATIONALE KD
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.1: Phương thức 2 \& 3 --- Sequence KD so với Rationale Distillation}{Khắc phục Sự Đứt gãy Biểu diễn Trung gian bằng Chuỗi Suy luận Nội tại \texttt{<think>}}
+  \begin{block}{Hàm Mục tiêu Chưng cất Quỹ đạo Suy luận (Rationale Distillation -- Hsieh et al., 2023)}
+    \[
+      \mathcal{L}_{\text{Rationale-KD}}(\theta_S) = -\E_{(x, z_T, y_T) \sim \mathcal{D}_{\text{verified}}} \Big[ \log \pi_S(z_T \mid x) + \log \pi_S(y_T \mid x, z_T) \Big]
+    \]
+  \end{block}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{Hạn chế của Sequence KD ($x \mapsto y_T$)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item Đáp án cuối $y_T$ là kết quả của nhiều bước biến đổi ẩn bên trong mạng Thầy lớn.
+        \item Lược bỏ chuỗi suy luận trung gian $z_T$ khiến Mô hình Trò (ít tầng ẩn hơn) rơi vào trạng thái \textbf{khớp mẫu bề mặt (Surface Pattern Matching)}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{Ưu thế của Rationale KD ($x \mapsto z_T \mapsto y_T$)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item Lọc mẫu theo ngưỡng kiểm chứng (\textit{Rejection Sampling}) để giữ các cặp $(z_T, y_T)$ đúng của Thầy.
+        \item Sinh chuỗi \texttt{<think>} $z_T$ trước giúp phân rã bài toán khó thành chuỗi các bước dự đoán cục bộ đơn giản trên ngữ cảnh.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: ĐỐI CHIẾU FORWARD KL VS REVERSE KL TRONG CHƯNG CẤT
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.1: Toán học Chưng cất Hiện đại --- Forward KL so với Reverse KL}{Tại sao Reverse KL (Mode-Seeking) Tối ưu cho Mô hình Trò Dung lượng Nhỏ? (Gu et al., 2024)}
+  \begin{block}{Công thức 10: Hai Chiều Phân kỳ KL giữa Mô hình Thầy ($P_T$) và Mô hình Trò ($P_S$)}
+    \[
+      \text{\textbf{1. Forward KL:}} \; \DKL(P_T \parallel P_S) = \sum_{y} P_T(y) \log \frac{P_T(y)}{P_S(y)}
+      \qquad
+      \text{\textbf{2. Reverse KL:}} \; \DKL(P_S \parallel P_T) = \sum_{y} P_S(y) \log \frac{P_S(y)}{P_T(y)}
+    \]
+  \end{block}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{Forward KL: Phủ Trung bình (Mean-Seeking)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{4pt}
+        \item Khi $P_T(y) > 0$, bắt buộc $P_S(y) > 0$ (nếu $P_S \to 0 \implies \log\frac{P_T}{P_S} \to +\infty$).
+        \item Mô hình Trò nhỏ cố trải rộng phân phối bao phủ mọi đỉnh của Thầy $\implies$ trọng tâm rơi vào vùng mật độ thấp ở giữa (nơi $P_T(y) \approx 0$).
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{Reverse KL: Hội tụ Cực đại (Mode-Seeking)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{4pt}
+        \item Khi $P_T(y) = 0$, bắt buộc $P_S(y) = 0$. Nhưng nếu Trò bỏ qua một số đỉnh phụ của Thầy ($P_S(y) = 0$), tích số $0 \log 0 = 0$ không gây phạt.
+        \item Cho phép Trò \textbf{tập trung $100\%$ dung lượng vào một cực đại tốt nhất của Thầy}.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: QUY TRÌNH KẾT HỢP TRÊN MÔ HÌNH NHỎ: DISTILLATION -> RL / DPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.1: Quy trình Kết hợp trên Mô hình Nhỏ (Distillation $\longrightarrow$ GRPO / DPO)}{Tại sao Mô hình Nhỏ Hiện đại Phối hợp Cả Chưng cất Lẫn Học Tăng cường?}
+  \subhead{Quy trình Hai Pha Khắc phục Đồng thời Triệt tiêu Đạo hàm và Exposure Bias}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{7pt}
+    \item \textbf{Pha 1 -- Chưng cất từ Mô hình Thầy Frontier (Logit KD / Rationale KD):}\\
+      \footnotesize Khởi tạo năng lực suy luận cho mô hình nhỏ, nâng xác suất giải đúng tiên nghiệm từ $0\%$ lên $50\%\text{--}70\%$. Tuy nhiên, do học tĩnh trên chuỗi của Thầy, mô hình Trò vẫn chịu \textit{Exposure Bias} và thiếu tín hiệu từ mẫu âm của chính nó.
+    \item \textbf{Pha 2 -- Chạy Bồi GRPO (RLVR) và DPO Trực tiếp trên Mô hình Trò:}\\
+      \footnotesize Nhờ Pha 1, nhóm $G$ quỹ đạo lấy mẫu trên mô hình nhỏ đã có cả mẫu dương lẫn mẫu âm ($\sigma_r > 0 \implies \hat{A}_i \neq 0$). Chạy tiếp GRPO + DPO giúp mô hình nhỏ tự khử lỗi lập luận nội tại và vượt trần chưng cất tĩnh (ứng dụng trên \textit{Qwen3, Gemma 2/3, DeepScaleR}).
+  \end{enumerate}
+\end{frame}
+
+\subsection{5.2. Thích nghi Hạng Thấp (LoRA), Hợp nhất Tham số \& Đánh giá Hệ thống}
+
+% ----------------------------------------------------------------------------
+% SLIDE: LÝ THUYẾT KHÔNG GIAN THAM SỐ: LORA & MODEL MERGING
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.2: Không gian Tham số --- Thích nghi Hạng Thấp (LoRA) \& Hợp nhất Mô hình}{Tối ưu hóa trên Đa tạp Chiều Thấp và Tổ hợp Tuyến tính Trọng số}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \motivehead{1. Chiều Nội tại Thấp \& LoRA (Hu et al., 2022)}
+      \footnotesize
+      \[
+        W = W_0 + \Delta W = W_0 + \frac{\alpha}{r} B A, \quad r \ll \min(d, k)
+      \]
+      \begin{itemize}\setlength{\itemsep}{4pt}
+        \item \textbf{Chiều nội tại thấp (Aghajanyan et al.):} Độ lệch $\Delta W$ trong Post-Training nằm trên đa tạp con hạng $r$ rất nhỏ ($r \in \{16, 32\}$).
+        \item \textbf{Chống Quên Thảm khốc (Biderman et al., 2024):} Đóng băng $W_0$ và chỉ cập nhật $<1\%$ tham số giúp bảo toàn tri thức gốc của Base Model.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{2. Số học Vector Tác vụ \& Hợp nhất Mô hình}
+      \footnotesize
+      \[
+        \tau_i = \theta_{\text{finetuned}}^{(i)} - \theta_{\text{base}} \implies \theta_{\text{merged}} = \theta_{\text{base}} + \sum_{i=1}^{M} \lambda_i \tau_i
+      \]
+      \begin{itemize}\setlength{\itemsep}{4pt}
+        \item \textbf{Linear Mode Connectivity:} Các mô hình tinh chỉnh từ cùng $\theta_{\text{base}}$ nằm chung trong một vùng trũng hàm mất mát (Loss Basin).
+        \item \textbf{TIES-Merging \& DARE:} Cắt tỉa $90\%$ biến thiên nhỏ và đồng bộ dấu để hợp nhất kỹ năng \textit{Toán} ($\tau_{\text{math}}$) và \textit{Hội thoại} ($\tau_{\text{chat}}$).
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: LÝ THUYẾT ĐÁNH GIÁ HỆ THỐNG: ALIGNMENT TAX, ELO & LLM-AS-A-JUDGE
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.2: Lý thuyết Đánh giá Hệ thống --- Thuế Căn chỉnh, Elo \& Trọng tài AI}{Đo lường Sự Đánh đổi Hiệu năng và Hiệu chỉnh Thiên kiến Đánh giá Tự động (Zheng et al., 2023)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.45\textwidth}
+      \limithead{1. Thuế Căn chỉnh \& Hệ thống Elo}
+      \scriptsize
+      \begin{itemize}\setlength{\itemsep}{4pt}
+        \item \textbf{Thuế Căn chỉnh (Alignment Tax):}\\
+          Quá trình RLHF / DPO thu hẹp entropy phân phối, làm giảm nhẹ độ đa dạng hoặc độ hiệu chỉnh xác suất (Calibration).
+        \item \textbf{Định lượng Elo (Chatbot Arena):}\\
+          Đánh giá đối kháng mù từng cặp theo mô hình Bradley-Terry:
+          \[
+            P(A \succ B) = \frac{1}{1 + 10^{(R_B - R_A)/400}}
+          \]
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \motivehead{2. Ba Thiên kiến của Trọng tài AI (LLM-as-a-Judge)}
+      \scriptsize
+      \renewcommand{\arraystretch}{1.22}
+      \begin{tabularx}{\textwidth}{@{}l X@{}}
+        \toprule
+        \textbf{Thiên kiến} & \textbf{Phương pháp Hiệu chỉnh Thống kê} \\
+        \midrule
+        \textbf{1. Vị trí} (\textit{Position}) & Đánh giá 2 chiều hoán vị $(A, B)$ và $(B, A)$ \\
+        \hline
+        \textbf{2. Độ dài} (\textit{Verbosity}) & Hồi quy tách phương sai độ dài (\textit{Length-Controlled Win Rate}) \\
+        \hline
+        \textbf{3. Tự tương đồng} & Hội đồng đa mô hình hoặc bộ kiểm chứng tất định \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\subsection{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: BẢN ĐỒ PHÂN LOẠI 3 TẦNG THUẬT NGỮ (TOÀN TRANG)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.3: Hệ thống Phân loại Học thuật Ba Tầng trong Hậu Huấn luyện}{Tách biệt Rạch ròi giữa Nguồn Phản hồi, Độ mịn Gán Tín dụng và Giải thuật Tối ưu hóa}
+  \vspace{0.1cm}
+  \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+      \begin{tikzpicture}[
+        layer/.style={rectangle, rounded corners=4pt, draw=navyblue, text=white, text width=3.3cm, minimum height=1.25cm, align=center, font=\scriptsize\sffamily\bfseries},
+        item/.style={rectangle, rounded corners=4pt, draw=tealgreen!85!black, line width=0.9pt, fill=softgreen, text width=3.5cm, minimum height=1.25cm, align=center, font=\scriptsize\sffamily}
+      ]
+        \node[layer, fill=navyblue] (L1) at (0, 1.65) {TẦNG 1: Nguồn Phát\\Tín hiệu Phản hồi\\(Feedback Source)};
+        \node[item] (L1a) at (4.1, 1.65) {\textbf{RLHF (Phần 2)}\\Đánh giá từ Con người\\(Cặp đối chiếu $y_w \succ y_l$)};
+        \node[item] (L1b) at (8.1, 1.65) {\textbf{RLAIF (Phần 3)}\\Đánh giá từ Mô hình AI\\(Hiến pháp / Quy tắc)};
+        \node[item, fill=softyellow, draw=amberorange!90!black] (L1c) at (12.1, 1.65) {\textbf{RLVR (Phần 4)}\\Bộ Kiểm chứng Tất định\\(Toán học / Trình biên dịch)};
+
+        \node[layer, fill=tealgreen] (L2) at (0, 0) {TẦNG 2: Độ Mịn\\Gán Tín dụng\\(Credit Granularity)};
+        \node[item, text width=5.5cm] (L2a) at (5.1, 0) {\textbf{ORM (Outcome Reward Model)}\\Cấp phát phần thưởng duy nhất ở cuối chuỗi phản hồi};
+        \node[item, text width=5.5cm] (L2b) at (11.1, 0) {\textbf{PRM (Process Reward Model)}\\Cấp phát phần thưởng chi tiết sau từng bước suy luận trung gian};
+
+        \node[layer, fill=stanfordred] (L3) at (0, -1.65) {TẦNG 3: Giải thuật\\Tối ưu hóa Tham số\\(Optimization Algorithm)};
+        \node[item, fill=softred, draw=stanfordred] (L3a) at (4.1, -1.65) {\textbf{PPO (Phần 2)}\\RL trực tuyến có mạng Giá trị $V_\psi$\\(Hệ thống 4 mô hình)};
+        \node[item, fill=softred, draw=stanfordred] (L3b) at (8.1, -1.65) {\textbf{DPO / SimPO (Phần 3)}\\Tối ưu hóa trực tiếp từ cặp tĩnh\\(Nghiệm đóng hàm mục tiêu)};
+        \node[item, fill=softred, draw=stanfordred] (L3c) at (12.1, -1.65) {\textbf{GRPO (Phần 4)}\\RL trực tuyến chuẩn hóa nhóm $G$\\(Loại bỏ mạng Giá trị)};
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.05cm}
+  \footnotesize
+  \textbf{Tổ hợp kiến trúc điển hình theo lịch sử:} \textit{InstructGPT (2022)} = \textbf{RLHF} + \textbf{ORM} + \textbf{PPO}. \quad $|$ \quad \textit{DeepSeek-R1 (2025)} = \textbf{RLVR} + \textbf{ORM} + \textbf{GRPO}.
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ TOÀN CẢNH CHUỖI TIẾN HÓA LÝ THUYẾT POST-TRAINING (TOÀN TRANG)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.3: Sơ đồ Tổng hợp Chuỗi Tiến hóa Lý thuyết (2020--2026)}{Mạch Logic Nhân quả: Giới hạn của Phương pháp Tiền nhiệm $\longrightarrow$ Động cơ của Phương pháp Kế tiếp}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}[
+        method/.style={rectangle, rounded corners=4pt, draw=navyblue, line width=1.05pt, fill=softblue, text width=2.9cm, minimum height=1.2cm, align=center, font=\scriptsize\sffamily\bfseries},
+        limit/.style={rectangle, rounded corners=4pt, draw=stanfordred, line width=0.9pt, fill=softred, text width=3.0cm, minimum height=1.1cm, align=center, font=\tiny\sffamily}
+      ]
+        \node[method] (pre) at (0, 1.65) {2020: Pre-training\\$\mathcal{L}_{\text{MLE}}(u_t \mid u_{<t})$};
+        \node[limit] (lim1) at (3.6, 1.65) {\textbf{Giới hạn:}\\Lệch mục tiêu với tác vụ\\tuân thủ chỉ thị};
+        \node[method] (sft) at (7.2, 1.65) {Phần 1: SFT (2021)\\$\mathcal{L}_{\text{SFT}}(y^* \mid x)$};
+        \node[limit] (lim2) at (10.8, 1.65) {\textbf{Giới hạn:}\\Lệch phơi nhiễm, ảo giác,\\thiếu tín hiệu từ mẫu âm};
+
+        \node[method] (rlhf) at (10.8, 0) {Phần 2: RLHF + PPO\\(2022 -- 4 mô hình)};
+        \node[limit] (lim3) at (7.2, 0) {\textbf{Giới hạn:}\\Chi phí bộ nhớ 4 mạng,\\sinh mẫu chậm, bất ổn định};
+        \node[method, fill=softgreen, draw=tealgreen] (dpo) at (3.6, 0) {Phần 3: DPO (2023)\\(Nghiệm đóng khử $Z(x)$)};
+        \node[limit] (lim4) at (0, 0) {\textbf{Giới hạn DPO:}\\Học tĩnh, thất bại ở\\Toán/Code (\textit{Reward Hacking})};
+
+        \node[method, fill=softyellow, draw=amberorange!90!black] (grpo) at (0, -1.65) {Phần 4: RLVR + GRPO\\(2024--2026: Bỏ Critic $V_\psi$)};
+        \node[limit] (lim5) at (5.4, -1.65) {\textbf{Giới hạn trên Mô hình nhỏ:}\\Cạn kiệt phần thưởng ($\hat{A}_i = 0$),\\đạo hàm triệt tiêu ($\nabla_\theta = \mathbf{0}$)};
+        \node[method, fill=softgreen, draw=tealgreen] (kd) at (10.8, -1.65) {Phần 5: Chưng cất\\(Logit / Sequence /\\Rationale KD)};
+
+        \draw[flow] (pre.east) -- (lim1.west);
+        \draw[flow] (lim1.east) -- (sft.west);
+        \draw[flow] (sft.east) -- (lim2.west);
+        \draw[flow] (lim2.south) -- (rlhf.north);
+        \draw[flow] (rlhf.west) -- (lim3.east);
+        \draw[flow] (lim3.west) -- (dpo.east);
+        \draw[flow] (dpo.west) -- (lim4.east);
+        \draw[flow] (lim4.south) -- (grpo.north);
+        \draw[flow] (grpo.east) -- (lim5.west);
+        \draw[flow] (lim5.east) -- (kd.west);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.05cm}
+  \footnotesize
+  \textbf{Quy trình tích hợp hiện đại:} \textbf{SFT khởi tạo} $\longrightarrow$ \textbf{RLVR + GRPO khám phá suy luận trên Frontier} $\longrightarrow$ \textbf{DPO căn chỉnh đa mục tiêu} $\longrightarrow$ \textbf{Distillation nén xuống mô hình nhỏ}.
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: BẢNG ĐỐI CHIẾU TỔNG KẾT 5 PHẦN TRỤ CỘT POST-TRAINING
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.3: Bảng Tổng hợp Đối chiếu Năm Phần Trụ cột theo Trình tự Lịch sử}{Tóm tắt Thành tựu Đạt được, Cấu hình Hệ thống và Điểm Nghẽn Chuyển giao qua Từng Giai đoạn}
+  \vspace{0.02cm}
+  \scriptsize
+  \renewcommand{\arraystretch}{1.18}
+  \begin{tabularx}{\textwidth}{@{}p{2.35cm} p{2.15cm} p{2.05cm} X X@{}}
+    \toprule
+    \textbf{Giai đoạn / Phần} & \textbf{Tín hiệu Học} & \textbf{Số Mô hình} & \textbf{Thành tựu Tối ưu so với Trước đó} & \textbf{Vấn đề Để lại cho Phần Sau} \\
+    \midrule
+    \textbf{Phần 1: SFT}\\(2020--2021) & Mẫu dương chuẩn $(x, y^*)$ & \textbf{1 mạng:} $\pi_\theta$ & Giải quyết \textit{Objective Mismatch}, dạy khuôn mẫu hội thoại nhanh & \textit{Exposure Bias}, kích thích ảo giác, thiếu tín hiệu từ mẫu âm \\
+    \hline
+    \textbf{Phần 2: RLHF+PPO}\\(2022 -- ChatGPT) & Điểm thưởng $r_\phi(x, \hat{y})$ trên mẫu tự sinh & \textbf{4 mạng:} $\pi_\theta, \pi_{\text{ref}}, r_\phi, V_\psi$ & Học trực tuyến (\textit{On-policy}), đạo hàm 2 chiều chế tài mẫu âm & Tốn bộ nhớ gấp 4 lần, sinh mẫu chậm, đạo hàm RL bất ổn định \\
+    \hline
+    \textbf{Phần 3: DPO}\\(2023--2024) & Cặp mẫu dương/âm $(x, y_w \succ y_l)$ & \textbf{2 mạng:} $\pi_\theta, \pi_{\text{ref}}$ & Nghiệm đóng khử $Z(x)$, bỏ $r_\phi$ \& $V_\psi$, ổn định như SFT & Học tĩnh (\textit{Off-policy}), thất bại ở Toán/Code do \textit{Reward Hacking} \\
+    \hline
+    \textbf{Phần 4: RLVR+GRPO}\\(Cuối 2024--2026) & Bộ kiểm chứng trên nhóm $\{o_1..o_G\}$ & \textbf{2 mạng:} $\pi_\theta, \pi_{\text{ref}}$ (+ Verifier) & Bỏ Critic $V_\psi$, miễn nhiễm \textit{Reward Hacking}, nảy sinh \texttt{<think>} & Mô hình nhỏ bị cạn kiệt phần thưởng ($\hat{A}_i = 0 \implies \nabla_\theta = \mathbf{0}$) \\
+    \hline
+    \textbf{Phần 5: Chưng cất}\\(Distillation) & Phân phối $P_T^{(\tau)}$ hoặc chuỗi $(z_T, y_T)$ & \textbf{2 mạng:} Thầy $\pi_T \to$ Trò $\pi_S$ & Truyền thẳng suy luận từ Thầy Frontier xuống mô hình nhỏ & Kết hợp thêm GRPO/DPO nhẹ sau chưng cất để khử \textit{Exposure Bias} \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: KẾT LUẬN CHUYÊN ĐỀ SEMINAR & THẢO LUẬN HỌC THUẬT
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 5.3: Tổng kết Chuyên đề Seminar \& Phiên Thảo luận Học thuật}{Năm Nguyên lý Lý thuyết Trọng tâm Xuyên suốt Lịch sử Hậu Huấn luyện (2020--2026)}
+  \subhead{Các Kết luận Khoa học Cốt lõi}
+  \scriptsize
+  \begin{enumerate}\setlength{\itemsep}{5pt}
+    \item \textbf{Phần 1 (2020--2021 -- SFT):} Định hình phân phối tuân thủ chỉ thị $\pi_\theta(y^* \mid x)$, nhưng chịu giới hạn bởi \textit{Exposure Bias} và sự vắng mặt của tín hiệu phạt từ mẫu âm.
+    \item \textbf{Phần 2 (2022 -- RLHF \& PPO):} Kết hợp hàm thưởng Bradley-Terry $r_\phi(y_w \succ y_l)$, điều chuẩn vùng tin cậy $\beta \DKL$ và giải thuật PPO giúp căn chỉnh trực tuyến, nhưng chịu gánh nặng bộ nhớ 4 mô hình.
+    \item \textbf{Phần 3 (2023--2024 -- DPO):} Nghiệm đóng phân phối Gibbs--Boltzmann kết hợp tính bất biến tịnh tiến Bradley-Terry giúp khử hàm phân hoạch $\beta \log Z(x)$, tối ưu hóa trực tiếp trên cặp mẫu dương/âm $(y_w, y_l)$.
+    \item \textbf{Phần 4 (Cuối 2024--2026 -- RLVR \& GRPO):} Bộ kiểm chứng tất định kết hợp chuẩn hóa nhóm $G$ quỹ đạo giúp xóa bỏ mạng Giá trị $V_\psi$ và kích hoạt chuỗi suy luận nội tại Hệ thống 2 (\texttt{<think>}).
+    \item \textbf{Phần 5 (Chưng cất Tri thức \& Không gian Tham số):} Chưng cất quỹ đạo suy luận kết hợp phân kỳ KL ngược (\textit{Reverse KL}) giúp mô hình nhỏ vượt qua hiện tượng triệt tiêu đạo hàm của RL.
+  \end{enumerate}
+
+  \vspace{0.08cm}
+  \begin{center}
+    \normalsize \textbf{\textcolor{navyblue}{Trân trọng cảm ơn sự theo dõi của Quý Thầy Cô và các bạn! --- Thảo luận \& Hỏi Đáp (Q\&A)}}
+  \end{center}
+\end{frame}

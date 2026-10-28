@@ -1,0 +1,446 @@
+% ============================================================================
+% PHẦN 2 (2022 - ĐẦU 2023): CĂN CHỈNH MÔ HÌNH BẰNG HỌC TĂNG CƯỜNG (RLHF & PPO)
+% ============================================================================
+\sectionintro{2}{Alignment với RLHF và PPO}{2022--đầu 2023}{Sở thích cặp, Reward Model, KL regularization và kiến trúc bốn mạng.}
+
+\subsection{2.1. Dữ liệu Đối chiếu Cặp \texorpdfstring{$(y_w, y_l)$}{(y\textunderscore w, y\textunderscore l)} \& Reward Model (\texorpdfstring{$r_\phi$}{r\textunderscore φ})}
+
+% ----------------------------------------------------------------------------
+% SLIDE: DỮ LIỆU ĐỐI CHIẾU CẶP
+% ----------------------------------------------------------------------------
+\begin{frame}{Thu thập dữ liệu cặp đối chiếu}
+  \lead{InstructGPT chuyển từ gán nhãn đơn lẻ sang quan hệ thứ tự cặp (Ouyang et al., 2022).}
+  \subhead{Quy trình xây dựng tập $\mathcal{D}_{\text{pair}}$}
+  \small
+  \begin{itemize}\setlength{\itemsep}{6pt}
+    \item \textbf{Lấy mẫu cặp phản hồi:} Truy vấn $x \sim \mathcal{D}_{\text{prompt}}$, sinh cặp đầu ra $(y_1, y_2) \sim \pi_{\text{SFT}}(\cdot \mid x)$.
+    \item \textbf{Gán nhãn ưu tiên (Pairwise Comparison):} Chuyên gia chọn $y_w \succ y_l$.
+      \begin{itemize}\small\setlength{\itemsep}{2pt}
+        \item $y_w$ (Preferred / Mẫu dương): Phản hồi hữu ích, an toàn hơn.
+        \item $y_l$ (Dispreferred / Mẫu âm): Phản hồi lỗi, độc hại hoặc lạc đề.
+      \end{itemize}
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TẠI SAO SO SÁNH CẶP
+% ----------------------------------------------------------------------------
+\begin{frame}{Tại sao sử dụng so sánh cặp?}
+  \lead{Loại bỏ phương sai cá nhân và trôi ngưỡng chấm điểm tuyệt đối.}
+  \subhead{Ưu thế thống kê của quan hệ nhị phân}
+  \small
+  \begin{itemize}\setlength{\itemsep}{6pt}
+    \item \textbf{Hạn chế của thang điểm tuyệt đối ($1\text{--}10$):}\\
+      Phương sai cao giữa các chuyên gia; ngưỡng chấm bị trôi dạt (Calibration Drift) theo thời gian.
+    \item \textbf{Tính nhất quán của so sánh nhị phân ($y_w \succ y_l$):}\\
+      Độ đồng thuận thống kê vượt trội; dễ chuẩn hóa trên quy mô dữ liệu lớn.
+    \item \textbf{Bổ sung Mẫu âm $y_l$ (Negative Sample):}\\
+      Cung cấp ranh giới đối chiếu rõ ràng để triệt tiêu hành vi sai lệch.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ HUẤN LUYỆN REWARD MODEL
+% ----------------------------------------------------------------------------
+\begin{frame}{Huấn luyện Reward Model}
+  \lead{Học điểm vô hướng $r_\phi(x,y)\in\mathbb{R}$ từ cặp mẫu dương và mẫu âm.}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[data, text width=2.8cm, minimum height=1.2cm] (prompt) at (0, 0) {
+          \textbf{Truy vấn $x$}\\
+          (Từ tập $\mathcal{D}_{\text{pair}}$)
+        };
+
+        \node[data, fill=softgreen, draw=tealgreen, text width=3.3cm, minimum height=1.1cm] (yw) at (4.2, 1.15) {
+          \textbf{Mẫu dương $y_w$}\\
+          (Positive Sample)
+        };
+
+        \node[data, fill=softred, draw=stanfordred, text width=3.3cm, minimum height=1.1cm] (yl) at (4.2, -1.15) {
+          \textbf{Mẫu âm $y_l$}\\
+          (Negative Sample)
+        };
+
+        \node[trainmodel, text width=3.8cm, minimum height=3.1cm] (rm) at (9.0, 0) {
+          \textbf{Reward Model $r_\phi$}\\
+          (Reward Model)\\[6pt]
+          \normalfont\scriptsize Khởi tạo từ $\pi_{\text{SFT}}$;\\
+          Thay đầu từ vựng $|\mathcal{V}|$ bằng\\
+          \textbf{Đầu Chiếu Vô hướng}\\
+          $W_r \in \mathbb{R}^{d \times 1}$ tại \texttt{<EOS>}
+        };
+
+        \node[rewardbox, text width=2.9cm, minimum height=1.0cm] (rw) at (13.3, 1.15) {
+          Điểm mẫu dương\\$\mathbf{r_\phi(x, y_w) \in \mathbb{R}}$
+        };
+
+        \node[lossbox, fill=softred, draw=stanfordred, text width=2.9cm, minimum height=1.0cm] (rl) at (13.3, -1.15) {
+          Điểm mẫu âm\\$\mathbf{r_\phi(x, y_l) \in \mathbb{R}}$
+        };
+
+        \node[lossbox, text width=3.6cm, minimum height=1.6cm] (btloss) at (17.5, 0) {
+          \textbf{Bradley--Terry Loss}\\[3pt]
+          $\mathcal{L}_{\text{RM}} = -\log \sigma(r_w - r_l)$\\[3pt]
+          \normalfont\scriptsize Cực đại hóa hiệu số $r_w - r_l$
+        };
+
+        \coordinate (bus_p) at (1.9, 0);
+        \draw[line width=1.05pt, draw=navyblue!85!black] (prompt.east) -- (bus_p);
+        \draw[flow] (bus_p) |- (yw.west);
+        \draw[flow] (bus_p) |- (yl.west);
+
+        \draw[flow] (yw.east) -- ([yshift=1.15cm]rm.west);
+        \draw[flow] (yl.east) -- ([yshift=-1.15cm]rm.west);
+
+        \draw[flow] ([yshift=1.15cm]rm.east) -- (rw.west);
+        \draw[flow] ([yshift=-1.15cm]rm.east) -- (rl.west);
+
+        \draw[flow] (rw.east) -| (btloss.north);
+        \draw[flow] (rl.east) -| (btloss.south);
+
+        \draw[gradflow] (btloss.south) -- (17.5, -2.35) -- node[below, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Backpropagation $\nabla_\phi \mathcal{L}_{\text{RM}}$ cập nhật tham số $\phi$} (9.0, -2.35) -- (rm.south);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{-0.05cm}
+  \small
+  \textbf{Nguyên lý:} Cặp $(x, y_w)$ và $(x, y_l)$ cùng đi qua $r_\phi$; gradient kéo tăng $r_\phi(x, y_w)$ ($\uparrow$) và hạ thấp $r_\phi(x, y_l)$ ($\downarrow$).
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: MÔ HÌNH BRADLEY-TERRY
+% ----------------------------------------------------------------------------
+\begin{frame}{Mô hình Bradley--Terry và Loss}
+  \lead{Maximum Likelihood Estimation cho quan hệ thứ tự cặp.}
+  \begin{block}{Bradley--Terry (1952) và Loss $\mathcal{L}_{\text{RM}}(\phi)$}
+    \small
+    \[
+      \fitmath{%
+      P(y_w \succ y_l \mid x) = \sigma\big(r_\phi(x, y_w) - r_\phi(x, y_l)\big), \qquad
+      \mathcal{L}_{\text{RM}}(\phi) = -\E_{(x, y_w, y_l)} \Big[ \log \sigma\big(r_\phi(x, y_w) - r_\phi(x, y_l)\big) \Big]
+      }
+    \]
+  \end{block}
+
+  \subhead{Đặc tính toán học}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Điểm vô hướng tại \texttt{<EOS>}:} $r_\phi(x, y) = W_r^\top h_{\text{EOS}}(x, y) \in \mathbb{R}$.
+    \item \textbf{Bất biến tịnh tiến (Shift Invariance):} Với mọi hàm $C(x)$, phép cộng $\tilde{r} = r + C(x)$ bảo toàn hiệu số và thứ tự ưu tiên:
+      $P_{\tilde{r}}(y_w \succ y_l \mid x) \equiv P_r(y_w \succ y_l \mid x)$.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+\subsection{2.2. Định luật Goodhart, KL regularization (\texorpdfstring{$\beta \DKL$}{β D\textunderscore KL}) \& Chu trình RL}
+
+% ----------------------------------------------------------------------------
+% SLIDE: ĐỊNH LUẬT GOODHART & REWARD HACKING
+% ----------------------------------------------------------------------------
+\begin{frame}{Định luật Goodhart và Reward Hacking}
+  \lead{Tối đa hóa cực đoan một hàm định giá xấp xỉ sẽ làm suy biến phân phối (Gao et al., 2023).}
+  \subhead{Rủi ro khi tối ưu trực tiếp $r_\phi(x, y)$}
+  \small
+  \begin{itemize}\setlength{\itemsep}{6pt}
+    \item \textbf{Định luật Goodhart:} Thước đo trở thành mục tiêu tối ưu sẽ mất tính tin cậy.
+    \item \textbf{Sai số ngoài phân phối (OOD Error):}\\
+      $r_\phi$ chỉ tin cậy gần $\pi_{\text{SFT}}$; ra xa vùng huấn luyện, $r_\phi$ cho điểm cao giả tạo.
+    \item \textbf{Hiện tượng Reward Hacking:}\\
+      Policy sinh văn bản vô nghĩa hoặc lặp từ nhưng vẫn đạt $r_\phi$ cực đại.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: ĐIỀU CHUẨN VÙNG TIN CẬY BẰNG KL DIVERGENCE
+% ----------------------------------------------------------------------------
+\begin{frame}{Điều chuẩn vùng tin cậy bằng KL Divergence}
+  \lead{Neo giữ Policy trong vùng tin cậy của mô hình tham chiếu $\pi_{\text{ref}}$.}
+  \begin{block}{Khoảng cách KL phân phối có điều kiện}
+    \[
+      \fitmath{%
+      \DKL\big(\pi_\theta(\cdot \mid x) \parallel \pi_{\text{ref}}(\cdot \mid x)\big) = \E_{y \sim \pi_\theta} \left[ \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \right]
+      }
+    \]
+  \end{block}
+
+  \subhead{Vai trò của Reference Model $\pi_{\text{ref}}$}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Cố định tham số:} Giữ nguyên trọng số từ $\pi_{\text{SFT}}$ (không cập nhật gradient).
+    \item \textbf{Phạt trôi dạt phân phối:} Ngăn Policy đi quá xa phân phối tự nhiên ban đầu.
+    \item \textbf{Bảo tồn tri thức:} Chống suy sụp entropy (Entropy Collapse) và giữ độ đa dạng.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: RLHF OBJECTIVE
+% ----------------------------------------------------------------------------
+\begin{frame}{RLHF Objective}
+  \lead{Tối đa hóa phần thưởng kết hợp KL regularization (Ouyang et al., 2022).}
+  \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
+    \[
+      \fitmath{%
+      \max_{\pi_\theta} \; J_{\text{RLHF}}(\pi_\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \Big]
+      }
+    \]
+  \end{block}
+
+  \subhead{Phần thưởng tổng hợp và hệ số $\beta > 0$}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item Phần thưởng hiệu dụng: $R_{\text{total}}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}$.
+    \item \textbf{Vai trò hệ số $\beta$:}
+      \begin{itemize}\small\setlength{\itemsep}{2pt}
+        \item $\beta \to 0 \implies$ Suy biến do \textit{Reward Hacking}.
+        \item $\beta \to +\infty \implies$ Policy bị đóng băng ($\pi_\theta \equiv \pi_{\text{ref}}$).
+      \end{itemize}
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ Online RL Loop
+% ----------------------------------------------------------------------------
+\begin{frame}{Online RL Loop}
+  \lead{Policy tự sinh mẫu $\hat y\sim\pi_\theta$ rồi nhận phản hồi để cập nhật.}
+  \vspace{0.12cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[data, text width=3.1cm, minimum height=1.3cm] (state) at (0, 0) {
+          \textbf{Trạng thái $s_t$}\\
+          Truy vấn $x$ \& tiền tố\\tự sinh $\hat{y}_{<t}$
+        };
+
+        \node[trainmodel, text width=3.5cm, minimum height=1.3cm] (policy) at (4.6, 0) {
+          \textbf{Policy $\pi_\theta(\hat{y}_t \mid s_t)$}\\
+          Mô hình Ngôn ngữ\\đang tối ưu hóa
+        };
+
+        \node[data, fill=softgreen, draw=tealgreen, text width=3.4cm, minimum height=1.3cm] (action) at (9.3, 0) {
+          \textbf{Quỹ đạo tự sinh}\\
+          Rút mẫu $\hat{y} \sim \pi_\theta(\cdot \mid x)$\\
+          (On-Policy Rollout)
+        };
+
+        \node[rewardbox, text width=3.5cm, minimum height=1.3cm] (env) at (14.0, 0) {
+          \textbf{Định giá Phần thưởng}\\
+          $R_{\text{total}} = r_\phi(x, \hat{y}) - \beta \DKL$
+        };
+
+        \node[lossbox, text width=4.8cm, minimum height=1.35cm] (update) at (12.5, -2.15) {
+          \textbf{Advantage Function $A(x, \hat{y})$}\\[2pt]
+          $A(x, \hat{y}) = R_{\text{total}} - b(x)$\\[2pt]
+          \normalfont\tiny $A > 0$: Tăng xác suất ($\uparrow$) \ | \ $A < 0$: Giảm xác suất ($\downarrow$)
+        };
+
+        \draw[flow] (state.east) -- (policy.west);
+        \draw[flow] (policy.east) -- (action.west);
+        \draw[flow] (action.east) -- (env.west);
+
+        \draw[flow] (env.south) -- (14.0, -1.15) -| ([xshift=0.8cm]update.north);
+        \draw[gradflow] (update.west) -- node[midway, above=3pt, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Cập nhật Gradient $\nabla_\theta J(\theta)$} (4.6, -2.15) -- (policy.south);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.05cm}
+  \small
+  \textbf{Khắc phục Exposure Bias:} Policy được tối ưu trực tiếp trên trạng thái tự sinh $\hat{s}_t \sim \pi_\theta$ và nhận phạt âm ($A < 0$) ngay khi đi chệch quỹ đạo.
+  \par\vspace{0pt}
+\end{frame}
+
+\subsection{2.3. Policy Gradient, Thuật toán PPO (Value Network \texorpdfstring{$V_\psi$}{V\textunderscore ψ}) \& Hệ thống 4 Mô hình}
+
+% ----------------------------------------------------------------------------
+% SLIDE: POLICY GRADIENT CHO SINH CHUỖI NGÔN NGỮ
+% ----------------------------------------------------------------------------
+\begin{frame}{Policy Gradient cho sinh chuỗi ngôn ngữ}
+  \lead{REINFORCE giải quyết bài toán không vi phân qua phép lấy mẫu rời rạc (Williams, 1992).}
+  \begin{block}{Đồng nhất thức Log-derivative Trick}
+    \[
+      \fitmath{%
+      \nabla_\theta J(\theta) = \nabla_\theta \sum_{y} \pi_\theta(y \mid x) R(x, y) = \E_{y \sim \pi_\theta} \Big[ R(x, y) \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
+      }
+    \]
+  \end{block}
+
+  \subhead{Bản chất toán học}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item Lấy mẫu rời rạc $y \sim \pi_\theta$ không thể truyền gradient trực tiếp: $\frac{\partial y}{\partial \theta}$ không tồn tại.
+    \item Áp dụng $\nabla_\theta \pi_\theta = \pi_\theta \nabla_\theta \log \pi_\theta$, đạo hàm kỳ vọng trở thành kỳ vọng của gradient log-xác suất.
+    \item Cho phép ước lượng Monte Carlo không chệch qua sinh mẫu (Rollout).
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: ADVANTAGE VÀ VAI TRÒ CỦA BASELINE
+% ----------------------------------------------------------------------------
+\begin{frame}{Advantage và vai trò của Baseline}
+  \lead{Trừ hàm baseline $b(x)$ để giảm phương sai mà không gây chệch kỳ vọng.}
+  \begin{block}{Policy Gradient với Advantage $A(x, y)$}
+    \[
+      \fitmath{%
+      \nabla_\theta J(\theta) = \E_{y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
+      }
+    \]
+  \end{block}
+
+  \subhead{Đặc tính của hàm Baseline $b(x)$}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Bảo toàn kỳ vọng:} $\E_{y}[b(x) \nabla_\theta \log \pi_\theta] = b(x)\nabla_\theta(1) = 0$.
+    \item \textbf{Phân định hướng cập nhật:}
+      \begin{itemize}\small\setlength{\itemsep}{2pt}
+        \item $A(x, y) > 0$: Quỹ đạo tốt hơn kỳ vọng $\longrightarrow$ Tăng xác suất ($\uparrow$).
+        \item $A(x, y) < 0$: Quỹ đạo kém hơn kỳ vọng $\longrightarrow$ Giảm xác suất ($\downarrow$).
+      \end{itemize}
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: PPO-CLIP: KIỂM SOÁT BƯỚC CẬP NHẬT
+% ----------------------------------------------------------------------------
+\begin{frame}{Thuật toán PPO: cơ chế Clipping}
+  \lead{Giới hạn tỷ số xác suất để cập nhật ổn định trong vùng tin cậy (Schulman et al., 2017).}
+  \begin{block}{Hàm mục tiêu PPO-Clip}
+    \[
+      \fitmath{%
+      \mathcal{J}_{\text{PPO}}(\theta) = \E_{t} \Big[ \min \Big( \rho_t(\theta) \hat{A}_t, \; \clip\big(\rho_t(\theta), 1 - \epsilon, 1 + \epsilon\big) \hat{A}_t \Big) \Big]
+      }
+    \]
+    với tỷ số xác suất: $\rho_t(\theta) = \dfrac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\theta_{\text{old}}}(y_t \mid x, y_{<t})}$.
+  \end{block}
+
+  \subhead{Cơ chế chặn gradient}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item $\rho_t(\theta)$: Tỷ số đo lường mức thay đổi xác suất giữa chính sách mới và cũ.
+    \item Khi $\rho_t(\theta)$ vượt ngoài $[1-\epsilon, 1+\epsilon]$ ($\epsilon = 0.2$), gradient bị triệt tiêu về $0$.
+    \item Ngăn ngừa các bước cập nhật quá lớn làm sụp đổ chính sách.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: MẠNG CRITIC TRONG PPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Mạng Critic trong PPO}
+  \lead{Ước lượng baseline động tại từng vị trí token để tính Advantage.}
+  \begin{block}{Hàm mất mát của Value Network $V_\psi$}
+    \[
+      \fitmath{%
+      \hat{A}_t = R_t - V_\psi(s_t), \qquad \mathcal{L}_{\text{Critic}}(\psi) = \E_{t} \Big[ \big(R_t - V_\psi(s_t)\big)^2 \Big]
+      }
+    \]
+  \end{block}
+
+  \subhead{Vai trò và rào cản tài nguyên}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Token-level Baseline:} Dự báo phần thưởng kỳ vọng từ trạng thái $s_t$, giảm mạnh phương sai của $\hat{A}_t$.
+    \item \textbf{Gánh nặng tham số:} Mạng $V_\psi$ có cùng quy mô với $\pi_\theta$ (chiếm gấp đôi VRAM GPU).
+    \item \textbf{Sai số xấp xỉ:} $V_\psi$ dự báo lệch khiến tín hiệu $\hat{A}_t$ méo mó, gây cập nhật sai hướng.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ 4 MÔ HÌNH PPO
+% ----------------------------------------------------------------------------
+\begin{frame}{RLHF + PPO: bốn mô hình phối hợp}
+  \lead{Actor, Reference, Reward Model và Critic cùng hoạt động trên GPU.}
+  \vspace{0.08cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[data, text width=2.4cm, minimum height=1.2cm] (prompt) at (0, 0) {
+          \textbf{Truy vấn $x$}\\
+          (Từ tập dữ liệu)
+        };
+
+        \node[trainmodel, text width=3.5cm, minimum height=1.35cm] (actor) at (4.2, 1.35) {
+          \textbf{1. Actor / Policy $\pi_\theta$}\\
+          (Đang huấn luyện)\\
+          \normalfont\scriptsize Tự sinh chuỗi $y \sim \pi_\theta(\cdot \mid x)$
+        };
+
+        \node[frozenmodel, text width=3.5cm, minimum height=1.35cm] (ref) at (4.2, -1.35) {
+          \textbf{2. Reference $\pi_{\text{ref}}$}\\
+          (Cố định tham số)\\
+          \normalfont\scriptsize Tính $\log \pi_{\text{ref}}(y \mid x)$
+        };
+
+        \node[data, fill=softgreen, draw=tealgreen, text width=2.5cm, minimum height=1.2cm] (resp) at (8.5, 0) {
+          \textbf{Chuỗi tự sinh $y$}\\
+          (On-policy Rollout)
+        };
+
+        \node[frozenmodel, text width=3.6cm, minimum height=1.35cm] (rm) at (12.8, 1.35) {
+          \textbf{3. Reward Model $r_\phi$}\\
+          (Cố định tham số)\\
+          \normalfont\scriptsize Định giá $r_\phi(x, y)$
+        };
+
+        \node[trainmodel, fill=softyellow, draw=amberorange!90!black, text width=3.6cm, minimum height=1.35cm] (critic) at (12.8, -1.35) {
+          \textbf{4. Critic / Value $V_\psi$}\\
+          (Đang huấn luyện)\\
+          \normalfont\scriptsize Ước lượng nền $V_\psi(s_t)$
+        };
+
+        \node[lossbox, text width=3.7cm, minimum height=2.2cm] (ppo) at (17.5, 0) {
+          \textbf{Tối ưu hóa PPO}\\[3pt]
+          $R_{\text{total}} = r_\phi - \beta \DKL$\\[2pt]
+          $\hat{A}_t = R_{\text{total}} - V_\psi(s_t)$\\[3pt]
+          \normalfont\scriptsize Cắt tỉa tỷ số $\clip(\rho_t)$
+        };
+
+        \coordinate (bus_p) at (1.8, 0);
+        \draw[line width=1.05pt, draw=navyblue!85!black] (prompt.east) -- (bus_p);
+        \draw[flow] (bus_p) |- (actor.west);
+        \draw[flow] (bus_p) |- (ref.west);
+
+        \draw[flow] (actor.east) -| (resp.north);
+        \draw[flow] (resp.south) |- (ref.east);
+
+        \coordinate (bus_r) at (10.3, 0);
+        \draw[line width=1.05pt, draw=navyblue!85!black] (resp.east) -- (bus_r);
+        \draw[flow] (bus_r) |- (rm.west);
+        \draw[flow] (bus_r) |- (critic.west);
+
+        \draw[flow] (rm.east) -| ([xshift=-0.4cm]ppo.north);
+        \draw[flow] (critic.east) -| ([xshift=-0.4cm]ppo.south);
+        \draw[flow] (ref.south) -- (4.2, -2.45) -- node[below, font=\scriptsize\rmfamily, text=slate] {Truyền $\log \pi_{\text{ref}}(y \mid x)$ để tính phân kỳ $\beta \DKL(\pi_\theta \parallel \pi_{\text{ref}})$} (17.5, -2.45) -- (ppo.south);
+
+        \draw[gradflow] (ppo.north) -- (17.5, 2.45) -- node[above, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Cập nhật Gradient PPO đồng thời cho Policy $\pi_\theta$ và Critic $V_\psi$} (4.2, 2.45) -- (actor.north);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \par\vspace{0pt}
+\end{frame}
+
+\subsection{2.4. Tổng kết Phần 2: Hạn chế của RLHF + PPO}
+
+% ----------------------------------------------------------------------------
+% SLIDE: HẠN CHẾ CỦA RLHF + PPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Hạn chế của RLHF + PPO}
+  \begin{enumerate}\setlength{\itemsep}{4pt}
+    \item \textbf{4-Model Memory Bottleneck:}\\
+      \small Duy trì đồng thời bốn mạng ($\pi_\theta, \pi_{\text{ref}}, r_\phi, V_\psi$) trên GPU, chiếm gấp đôi VRAM.
+    \item \textbf{Autoregressive Rollout Bottleneck:}\\
+      \small Sinh mẫu tự hồi quy từng token On-policy chiếm $>70\%$ thời gian tính toán.
+    \item \textbf{Variance and Approximation Error:}\\
+      \small Sai số xấp xỉ từ $r_\phi$ và Critic $V_\psi$ khiến gradient có phương sai lớn và bất ổn định.
+  \end{enumerate}
+  \par\vspace{0pt}
+\end{frame}

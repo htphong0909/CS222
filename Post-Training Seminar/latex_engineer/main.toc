@@ -1,0 +1,91 @@
+\babel@toc {vietnamese}{}\relax 
+\contentsline {chapter}{Bản Đồ Tư Duy \& Khung Quyết Định Chọn Phương Pháp Cho AI Engineer}{5}{chapter*.2}%
+\contentsline {chapter}{\numberline {1}Bản đồ Chiến lược Post-Training \& Giải mã SFT dưới Góc nhìn Kỹ sư}{7}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Khoảng cách Mục tiêu (Objective Mismatch) \& Bài toán RAG vs. SFT}{7}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Giải phẫu Chat Template, Special Tokens \& Bẫy Khởi tạo Embedding}{9}{section.1.2}%
+\contentsline {subsection}{\numberline {1.2.1}Tại sao thêm Special Token mới mà khởi tạo ngẫu nhiên lại làm ``Hỏng não'' Mô hình?}{9}{subsection.1.2.1}%
+\contentsline {section}{\numberline {1.3}Kỹ thuật Mặt nạ Mất mát (Prompt Masking / Loss Masking)}{10}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Sequence Packing, Mặt nạ Đường chéo Khối \& Đặt lại Vị trí RoPE}{11}{section.1.4}%
+\contentsline {section}{\numberline {1.5}Kỹ nghệ Dữ liệu SFT (2024--2026): Từ LIMA, Magpie đến Bẫy Model Collapse}{12}{section.1.5}%
+\contentsline {subsection}{\numberline {1.5.1}1. Giả thuyết LIMA \citep {zhou2023lima} vs. Thực tế Công nghiệp của Llama 3 \& Tülu 3 \citep {dubey2024llama, lambert2024tulu}}{12}{subsection.1.5.1}%
+\contentsline {subsection}{\numberline {1.5.2}2. Làm sao tạo ra 500,000 mẫu SFT chất lượng cao mà không phá sản? (Magpie \& Rejection Sampling)}{13}{subsection.1.5.2}%
+\contentsline {chapter}{\numberline {2}Giải mã Học Tăng Cường (RL), RLHF, RLOO \& PPO cho Kỹ sư AI (Từ Con số 0)}{14}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Ba ``Căn bệnh Bẩm sinh'' của SFT mà Kỹ sư nào cũng gặp}{14}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Căn bệnh 1: Dạy mô hình ``Nói dối không chớp mắt'' (Hallucination do Behavior Cloning)}{14}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Căn bệnh 2: Sai một ly, đi một dặm (Exposure Bias \citealt {ranzato2016sequence, ross2011reduction})}{15}{subsection.2.1.2}%
+\contentsline {subsection}{\numberline {2.1.3}Căn bệnh 3: Chấm điểm máy móc từng từ \& Không có khái niệm về ``Câu trả lời Tệ''}{15}{subsection.2.1.3}%
+\contentsline {section}{\numberline {2.2}Nhập môn Học Tăng Cường (RL) trong 10 Phút cho Kỹ sư AI}{16}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Giải mã Công thức Đạo hàm Chính sách (Policy Gradient / REINFORCE)}{16}{subsection.2.2.1}%
+\contentsline {section}{\numberline {2.3}Reward Model (RM), Bradley--Terry \& Thế hệ Giám khảo Mới (GenRM 2025)}{17}{section.2.3}%
+\contentsline {subsection}{\numberline {2.3.1}Tại sao thu thập dữ liệu So sánh Cặp ($y_w \succ y_l$) thay vì bắt con người chấm điểm 1--10?}{18}{subsection.2.3.1}%
+\contentsline {subsection}{\numberline {2.3.2}Giải mã Công thức Bradley--Terry \citep {bradley1952rank} bằng Con số Cụ thể}{18}{subsection.2.3.2}%
+\contentsline {subsection}{\numberline {2.3.3}Kiến trúc của Reward Model \& Bước tiến sang GenRM (2025)}{18}{subsection.2.3.3}%
+\contentsline {section}{\numberline {2.4}Định luật Goodhart, Ràng buộc KL \& Giải phẫu PPO / GAE}{19}{section.2.4}%
+\contentsline {subsection}{\numberline {2.4.1}Tại sao không có Ràng buộc KL thì Mô hình sẽ ``Phát điên''? (Reward Hacking \citealt {gao2023scaling})}{19}{subsection.2.4.1}%
+\contentsline {subsection}{\numberline {2.4.2}Giải thích Trực quan Mạng Phê bình (Critic $V_\psi $), GAE \& Phanh ABS của PPO}{20}{subsection.2.4.2}%
+\contentsline {section}{\numberline {2.5}Tại sao Kỹ sư AI lại ``Sợ'' PPO? Bài toán 4 Mô hình \& Sự trỗi dậy của RLOO}{21}{section.2.5}%
+\contentsline {subsection}{\numberline {2.5.1}Giải pháp Cứu cánh cho Kỹ sư: Thuật toán RLOO (REINFORCE Leave-One-Out \citealt {ahmadian2024back})}{22}{subsection.2.5.1}%
+\contentsline {chapter}{\numberline {3}Direct Preference Optimization (DPO) và Hệ sinh thái Căn chỉnh Không cần RL}{23}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Trực giác và Giải mã Toán học của DPO}{23}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1}Bí mật động trời: Tại sao LLM chính là một Reward Model?}{23}{subsection.3.1.1}%
+\contentsline {paragraph}{Cú lật ngược bàn cờ của DPO:}{24}{section*.3}%
+\contentsline {subsection}{\numberline {3.1.2}Tại sao Hàm phân hoạch $Z(x)$ tự động biến mất?}{24}{subsection.3.1.2}%
+\contentsline {subsection}{\numberline {3.1.3}Giải mã Gradient của DPO: ``Bộ điều tốc tự động'' thông minh}{25}{subsection.3.1.3}%
+\contentsline {section}{\numberline {3.2}Giải phẫu 4 ``Căn bệnh Thực chiến'' của DPO \& Các Biến thể Cứu cánh (2024–2026)}{26}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}Bệnh 1: Thiên kiến Độ dài (Length Bias) $\DOTSB \relbar \joinrel \rightarrow $ Giải pháp SimPO \& ORPO}{26}{subsection.3.2.1}%
+\contentsline {paragraph}{Triệu chứng lâm sàng:}{26}{section*.4}%
+\contentsline {paragraph}{Nguyên nhân gốc rễ trong công thức Toán:}{26}{section*.5}%
+\contentsline {paragraph}{Thuốc đặc trị 1: SimPO (Simple Preference Optimization) \citep {meng2024simpo}:}{27}{section*.6}%
+\contentsline {paragraph}{Thuốc đặc trị 2: ORPO (Odds Ratio Preference Optimization) \citep {hong2024orpo}:}{27}{section*.7}%
+\contentsline {subsection}{\numberline {3.2.2}Bệnh 2: Nghịch lý Sụt giảm Xác suất Câu thắng (Likelihood Displacement) $\DOTSB \relbar \joinrel \rightarrow $ Giải pháp RPO / DPO+NLL}{28}{subsection.3.2.2}%
+\contentsline {paragraph}{Triệu chứng lâm sàng kỳ quái:}{28}{section*.8}%
+\contentsline {paragraph}{Thuốc đặc trị: DPO + NLL Anchor (Iterative RPO) \citep {pang2024iterative, pal2024smaug}:}{28}{section*.9}%
+\contentsline {subsection}{\numberline {3.2.3}Bệnh 3: Quá khớp (Overfitting) khi sở thích gần như tuyệt đối $\DOTSB \relbar \joinrel \rightarrow $ Giải pháp IPO}{29}{subsection.3.2.3}%
+\contentsline {paragraph}{Triệu chứng lâm sàng:}{29}{section*.10}%
+\contentsline {paragraph}{Nguyên nhân:}{29}{section*.11}%
+\contentsline {paragraph}{Thuốc đặc trị: IPO ($\Psi $PO / Identity Preference Optimization) \citep {azar2024general}:}{29}{section*.12}%
+\contentsline {subsection}{\numberline {3.2.4}Bệnh 4: Đói dữ liệu cặp (Paired Data Bottleneck) $\DOTSB \relbar \joinrel \rightarrow $ Giải pháp KTO}{29}{subsection.3.2.4}%
+\contentsline {paragraph}{Thuốc đặc trị: KTO (Kahneman-Tversky Optimization) \citep {ethayarajh2024kto}:}{29}{section*.13}%
+\contentsline {subsection}{\numberline {3.2.5}Offline DPO vs. Online / Iterative DPO: Chìa khóa tiệm cận PPO}{30}{subsection.3.2.5}%
+\contentsline {chapter}{\numberline {4}Reasoning RL, RLVR, GRPO và Cuộc cách mạng Suy luận (2024–2026)}{32}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Từ RLHF sang RLVR: Tại sao bỏ Neural Reward Model lại mở khóa Siêu trí tuệ?}{32}{section.4.1}%
+\contentsline {subsection}{\numberline {4.1.1}Bức tường vô hình của Neural Reward Model trong Toán và Code}{32}{subsection.4.1.1}%
+\contentsline {subsection}{\numberline {4.1.2}RLVR (RL with Verifiable Rewards): Sự thật khách quan không thể bị thao túng}{33}{subsection.4.1.2}%
+\contentsline {subsection}{\numberline {4.1.3}Cuộc đại tranh luận: PRM (Chấm điểm từng bước) vs. ORM (Chấm điểm kết quả cuối)}{33}{subsection.4.1.3}%
+\contentsline {subsection}{\numberline {4.1.4}Hiện tượng ``Aha Moment'' trong DeepSeek-R1-Zero và Quy trình 4 Giai đoạn}{34}{subsection.4.1.4}%
+\contentsline {section}{\numberline {4.2}Giải phẫu Thuật toán GRPO (Group Relative Policy Optimization)}{35}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}Cơ chế Chuẩn hóa Nhóm (Group Relative Advantage)}{35}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}Hàm mục tiêu đầy đủ của GRPO và Ước lượng KL Không chệch của Schulman}{37}{subsection.4.2.2}%
+\contentsline {section}{\numberline {4.3}Các Bản Nâng cấp GRPO Thế hệ Mới (2025–2026): Dr.~GRPO và DAPO}{37}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Dr.~GRPO (GRPO Done Right): Giải phẫu 2 Thiên kiến Toán học trong GRPO gốc}{38}{subsection.4.3.1}%
+\contentsline {paragraph}{Công thức sửa lỗi của Dr.~GRPO \citep {liu2025understanding}:}{38}{section*.14}%
+\contentsline {subsection}{\numberline {4.3.2}DAPO (Decoupled Clip and Dynamic Sampling Policy Optimization)}{38}{subsection.4.3.2}%
+\contentsline {section}{\numberline {4.4}Mở rộng Chi phí Tính toán Lúc Suy luận (Test-Time Compute Scaling) \& Agentic RL}{39}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}Quy luật Mở rộng thứ hai của AI và Thước đo $\text {Pass@}k$}{39}{subsection.4.4.1}%
+\contentsline {subsection}{\numberline {4.4.2}Căn bệnh ``Suy nghĩ Quá mức'' (Overthinking) và Kỹ thuật Budget Forcing (\texttt {s1})}{39}{subsection.4.4.2}%
+\contentsline {paragraph}{Bệnh Overthinking \citep {chen2025donot}:}{39}{section*.15}%
+\contentsline {paragraph}{Ép ngân sách suy nghĩ lúc chạy (Budget Forcing trong mô hình \texttt {s1}) \citep {muennighoff2025s1}:}{40}{section*.16}%
+\contentsline {subsection}{\numberline {4.4.3}Agentic RL đa lượt với Công cụ bên ngoài (\texttt {Search-R1})}{40}{subsection.4.4.3}%
+\contentsline {chapter}{\numberline {5}Chưng cất Tri thức (Knowledge Distillation) và Hợp nhất Mô hình (Model Merging)}{41}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Nghịch lý DeepSeek-R1: Tại sao Chưng cất (Distillation) lại thắng tự chạy RL trên Mô hình Nhỏ?}{41}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Ba Cấp độ Chưng cất Tri thức (Knowledge Distillation) cho LLMs}{42}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Cấp độ 1: Chưng cất Mức Chuỗi (Sequence-Level / Black-Box Distillation)}{42}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}Cấp độ 2: Chưng cất Mức Logit \& ``Tri thức Tối'' (White-Box Logit Distillation)}{43}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.2.3}Cấp độ 3: Forward KL vs.~Reverse KL và Chưng cất On-Policy (\texttt {MiniLLM} / \texttt {GKD})}{44}{subsection.5.2.3}%
+\contentsline {subsubsection}{Sai lầm 1: Dùng Forward KL khiến mô hình nhỏ bị ``Bắt cá hai tay'' (Mean-Seeking)}{44}{section*.17}%
+\contentsline {subsubsection}{Sai lầm 2: Chỉ học trên câu của Thầy mà không sửa lỗi trên câu của Trò (On-Policy GKD)}{45}{section*.18}%
+\contentsline {section}{\numberline {5.3}Hợp nhất Mô hình (Model Merging): ``Hợp thể'' Đa kỹ năng Không cần GPU}{45}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Vector Tác vụ (Task Vectors) và Tại sao Cộng Trung bình Ngây thơ lại Thất bại?}{45}{subsection.5.3.1}%
+\contentsline {subsection}{\numberline {5.3.2}Giải pháp 1: TIES-Merging (Trim, Elect Sign, \& Merge) \citep {yadav2023ties}}{46}{subsection.5.3.2}%
+\contentsline {subsection}{\numberline {5.3.3}Giải pháp 2: DARE (Drop And REscale) \citep {yu2024language}}{47}{subsection.5.3.3}%
+\contentsline {chapter}{\numberline {6}Tối ưu Hệ thống, Đánh giá Mô hình và Playbook Gỡ lỗi Thực chiến}{49}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Toán học Tính nhẩm Bộ nhớ GPU (Back-of-the-Envelope VRAM Math)}{49}{section.6.1}%
+\contentsline {subsection}{\numberline {6.1.1}Quy tắc $16\Psi $: Tại sao Mô hình 7B lại ngốn hơn 112 GB VRAM khi Huấn luyện?}{49}{subsection.6.1.1}%
+\contentsline {subsection}{\numberline {6.1.2}``Sát thủ giấu mặt'' làm tràn VRAM: Ma trận Logits ở Đầu ra Từ vựng (LM Head)}{50}{subsection.6.1.2}%
+\contentsline {section}{\numberline {6.2}Kiến trúc Hạ tầng RL Hiện đại (\texttt {HybridFlow} / \texttt {verl})}{51}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Phản biện Kỹ thuật: Khi nào dùng LoRA / QLoRA, Khi nào bắt buộc Full Fine-Tuning?}{51}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Đánh giá Khoa học (Evaluation) và Khử Thiên kiến LLM-as-a-Judge}{53}{section.6.4}%
+\contentsline {subsection}{\numberline {6.4.1}Thuế Căn chỉnh (Alignment Tax) \citep {ouyang2022training, bai2022training}}{53}{subsection.6.4.1}%
+\contentsline {subsection}{\numberline {6.4.2}Ba Thiên kiến Chí mạng của LLM-as-a-Judge và Thuốc giải LC-AlpacaEval}{53}{subsection.6.4.2}%
+\contentsline {paragraph}{Thuốc giải chuẩn công nghiệp: Length-Controlled AlpacaEval (LC-AlpacaEval) \citep {dubois2024length}:}{54}{section*.19}%
+\contentsline {section}{\numberline {6.5}Playbook Gỡ lỗi Thực chiến (10 Tình huống Cấp cứu cho AI Engineer)}{54}{section.6.5}%

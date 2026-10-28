@@ -1,0 +1,345 @@
+% ============================================================================
+% PHẦN 1 (2020 - 2021): TỪ TIỀN HUẤN LUYỆN ĐẾN TINH CHỈNH CÓ GIÁM SÁT (SFT)
+% ============================================================================
+\section{Phần 1 (2020--2021): Từ Tiền huấn luyện đến Tinh chỉnh có Giám sát (SFT)}
+
+\subsection{1.1. Bối cảnh Lịch sử (2020--2026) \& Sự Lệch Mục tiêu của Tiền huấn luyện}
+
+% ----------------------------------------------------------------------------
+% SLIDE: MÔ HÌNH TIỀN HUẤN LUYỆN (GPT-3, 2020)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.1: Mô hình Ngôn ngữ Tiền huấn luyện (GPT-3 -- 2020)}{Hàm Mục tiêu Tự hồi quy và Cơ chế Nén Tri thức Nền tảng (Brown et al., 2020)}
+  \begin{block}{Công thức 1: Hàm Mục tiêu Dự đoán Token Tiếp theo (Autoregressive MLE)}
+    \[
+      \mathcal{L}_{\text{Pretrain}}(\theta) = -\sum_{t=1}^{T} \log P_\theta(u_t \mid u_1, u_2, \dots, u_{t-1})
+    \]
+  \end{block}
+
+  \subhead{Đặc tính Toán học của Mô hình Nền (Base Model)}
+  \small
+  \begin{itemize}\setlength{\itemsep}{7pt}
+    \item \textbf{Xấp xỉ phân phối biên ngôn ngữ:} Học phân phối có điều kiện $P_\theta(u_t \mid u_{<t})$ trên kho văn bản quy mô $10^{12}\text{--}10^{13}$ token.
+    \item \textbf{Nội hóa tri thức thế giới:} Nén cấu trúc cú pháp, tri thức sự kiện (factual knowledge) và quy luật suy diễn vào không gian tham số $\theta$.
+    \item \textbf{Giới hạn năm 2020:} Vận hành thuần túy như bộ nối tiếp chuỗi xác suất; phụ thuộc hoàn toàn vào kỹ thuật đặt ví dụ trong ngữ cảnh (\textit{Few-shot In-Context Learning}).
+  \end{itemize}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SỰ LỆCH MỤC TIÊU (OBJECTIVE MISMATCH)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.1: Sự Lệch Mục tiêu (Objective Mismatch)}{Bất tương thích giữa Huấn luyện Dự đoán Văn bản và Tác vụ Giải quyết Yêu cầu}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \limithead{Hạn chế của Tiền huấn luyện (Pre-training)}
+      \small
+      \begin{itemize}\setlength{\itemsep}{7pt}
+        \item \textbf{Lệch mục tiêu tối ưu hóa:}
+          \begin{itemize}\footnotesize\setlength{\itemsep}{3pt}
+            \item Đầu vào $x$: \textit{``Giải thích nguyên lý của laser?''}
+            \item Đầu ra Base Model: Sinh tiếp các câu hỏi số 2, số 3 thay vì trả lời.
+          \end{itemize}
+        \item \textbf{Không phân biệt chất lượng dữ liệu:}
+          \begin{itemize}\footnotesize\setlength{\itemsep}{3pt}
+            \item Tái tạo cả sai số thực tế, định kiến và nội dung độc hại từ tập dữ liệu web.
+          \end{itemize}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \motivehead{Mục tiêu của Hậu huấn luyện (Post-Training)}
+      \small
+      \begin{itemize}\setlength{\itemsep}{7pt}
+        \item \textbf{Định hướng phân phối phản hồi:} Chuyển dịch từ $P_\theta(u_t \mid u_{<t})$ sang phân phối phản hồi theo chỉ thị $\pi_\theta(y \mid x)$.
+        \item \textbf{Ba tiêu chuẩn căn chỉnh (3H Criteria):}
+          \begin{enumerate}\footnotesize\setlength{\itemsep}{3pt}
+            \item \textbf{Helpful (Hữu ích):} Giải quyết đúng yêu cầu.
+            \item \textbf{Honest (Trung thực):} Hạn chế bịa đặt thông tin.
+            \item \textbf{Harmless (An toàn):} Từ chối tác vụ độc hại.
+          \end{enumerate}
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: BIÊN NIÊN SỬ TIẾN HÓA POST-TRAINING 2020 - 2026 (TOÀN TRANG)
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.1: Biên niên sử Tiến hóa Hậu Huấn luyện (2020 -- 2026)}{Dòng Chảy Lịch sử qua Năm Giai đoạn Chuyển dịch Thuật toán}
+  \vspace{0.12cm}
+  \begin{center}
+    \resizebox{0.97\textwidth}{!}{%
+      \begin{tikzpicture}[
+        era/.style={rectangle, rounded corners=4pt, draw=navyblue, line width=1.0pt, fill=softblue, text width=3.1cm, minimum height=1.25cm, align=center, font=\scriptsize\sffamily\bfseries},
+        detail/.style={rectangle, rounded corners=4pt, draw=tealgreen!85!black, line width=0.85pt, fill=softgreen, text width=3.1cm, minimum height=2.15cm, align=left, inner sep=4pt, font=\tiny\sffamily}
+      ]
+        \node[era] (e1) at (0, 1.35) {Giai đoạn 1 (2020--2021)\\\textcolor{stanfordred}{Phần 1: SFT}\\(FLAN, T0)};
+        \node[era] (e2) at (3.65, 1.35) {Giai đoạn 2 (2022)\\\textcolor{stanfordred}{Phần 2: RLHF + PPO}\\(InstructGPT, ChatGPT)};
+        \node[era] (e3) at (7.3, 1.35) {Giai đoạn 3 (2023--2024)\\\textcolor{stanfordred}{Phần 3: DPO \& Biến thể}\\(Llama 2/3, SimPO)};
+        \node[era, fill=softyellow, draw=amberorange!90!black] (e4) at (10.95, 1.35) {Giai đoạn 4 (2024--2026)\\\textcolor{stanfordred}{Phần 4: RLVR + GRPO}\\(o1/o3, DeepSeek-R1)};
+        \node[era, fill=softred, draw=stanfordred] (e5) at (14.6, 1.35) {Chuyên đề Cuối\\\textcolor{stanfordred}{Phần 5: Chưng cất}\\(Distillation \& Merging)};
+
+        \node[detail] (d1) at (0, -0.75) {
+          \textbf{Đóng góp:} Học có giám sát trên mẫu chuẩn $\mathcal{L}_{\text{SFT}}(y^* \mid x)$.\\[4pt]
+          \textbf{Hạn chế:} \textit{Exposure Bias}, ảo giác, thiếu tín hiệu từ mẫu âm.
+        };
+        \node[detail] (d2) at (3.65, -0.75) {
+          \textbf{Đóng góp:} Hàm thưởng $r_\phi(y_w \succ y_l)$ + Điều chuẩn $\beta\DKL$ + PPO 4 mạng.\\[4pt]
+          \textbf{Hạn chế:} Quá nặng VRAM (4 mô hình), đạo hàm RL bất ổn.
+        };
+        \node[detail] (d3) at (7.3, -0.75) {
+          \textbf{Đóng góp:} Nghiệm đóng khử $Z(x)$, bỏ $r_\phi$ \& $V_\psi$, chỉ cần 2 mô hình.\\[4pt]
+          \textbf{Hạn chế:} Học ngoại tuyến (\textit{Off-policy}), bị \textit{Reward Hacking} ở Toán/Code.
+        };
+        \node[detail, fill=softyellow!70!white, draw=amberorange!90!black] (d4) at (10.95, -0.75) {
+          \textbf{Đóng góp:} Kiểm chứng tất định + Chuẩn hóa nhóm $G$ bỏ Critic $V_\psi$ $\to$ Chuỗi \texttt{<think>}.\\[4pt]
+          \textbf{Hạn chế:} Mô hình nhỏ bị $\nabla_\theta = \mathbf{0}$.
+        };
+        \node[detail, fill=softred!60!white, draw=stanfordred] (d5) at (14.6, -0.75) {
+          \textbf{Đóng góp:} Chuyển giao phân phối $P_T^{(\tau)}$ và chuỗi \texttt{<think>} từ Thầy sang Trò.\\[4pt]
+          \textbf{Mở rộng:} Reverse KL, LoRA, Merging \& Đánh giá.
+        };
+
+        \draw[flow] (e1.east) -- (e2.west);
+        \draw[flow] (e2.east) -- (e3.west);
+        \draw[flow] (e3.east) -- (e4.west);
+        \draw[flow] (e4.east) -- (e5.west);
+
+        \draw[flow] (e1.south) -- (d1.north);
+        \draw[flow] (e2.south) -- (d2.north);
+        \draw[flow] (e3.south) -- (d3.north);
+        \draw[flow] (e4.south) -- (d4.north);
+        \draw[flow] (e5.south) -- (d5.north);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.04cm}
+  \footnotesize
+  \textbf{Quy luật tiến hóa:} Giới hạn toán học và hệ thống của giai đoạn trước là động cơ trực tiếp sinh ra thuật toán của giai đoạn kế tiếp.
+\end{frame}
+
+\subsection{1.2. Tinh chỉnh theo Chỉ thị có Giám sát (SFT -- Giai đoạn 2021--2022)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SUPERVISED FINE-TUNING (SFT) & KHUÔN MẪU HỘI THOẠI
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.2: Tinh chỉnh có Giám sát (SFT) --- Cấu trúc Hóa Chuỗi Tương tác}{Phương pháp Học Bắt chước Chuyên gia (Behavioral Cloning -- Wei et al., 2022)}
+  \subhead{Định dạng Dữ liệu Giám sát và Token Điều khiển}
+  \small
+  \begin{itemize}\setlength{\itemsep}{6pt}
+    \item \textbf{Tập dữ liệu:} $\mathcal{D}_{\text{SFT}} = \{(x^{(i)}, y^{*(i)})\}_{i=1}^{N}$ gồm truy vấn đầu vào $x$ và mẫu phản hồi chuẩn $y^*$.
+    \item \textbf{Phân vùng ngữ cảnh bằng Token đặc biệt (Control Tokens):}
+      \begin{itemize}\footnotesize\setlength{\itemsep}{3pt}
+        \item \texttt{<|im\_start|>system ... <|im\_end|>} $\longrightarrow$ Ràng buộc hệ thống toàn cục.
+        \item \texttt{<|im\_start|>user ... <|im\_end|>} $\longrightarrow$ Miền truy vấn đầu vào $x$.
+        \item \texttt{<|im\_start|>assistant ... <|im\_end|>} $\longrightarrow$ Miền sinh phản hồi mục tiêu $y^*$.
+      \end{itemize}
+  \end{itemize}
+
+  \vspace{0.1cm}
+  \begin{exampleblock}{Ý nghĩa Toán học của Token Kết thúc \texttt{<EOS>} (\texttt{<|im\_end|>})}
+    \footnotesize
+    Đưa \texttt{<EOS>} vào miền tính đạo hàm giúp mô hình ước lượng chính xác xác suất dừng chuỗi $P_\theta(\texttt{<EOS>} \mid x, y_{\le T}^*)$, triệt tiêu hiện tượng sinh văn bản tràn lan của Base Model.
+  \end{exampleblock}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ LUỒNG DỮ LIỆU HUẤN LUYỆN SFT & PROMPT MASKING
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.2: Sơ đồ Luồng Dữ liệu Huấn luyện SFT \& Mặt nạ Hàm Mất mát}{Cơ chế Truyền Thuận Toàn chuỗi và Lan truyền Ngược có Chọn lọc (Prompt Masking)}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[data, text width=3.6cm, fill=gray!18, draw=slate] (prompt) at (0, 1.0) {
+          \textbf{Truy vấn Đầu vào $x$}\\
+          \texttt{<|user|> Nội dung câu hỏi...}\\
+          Mặt nạ: $\mathbf{m_t = 0}$ (Triệt tiêu lỗi)
+        };
+        \node[data, text width=3.6cm, fill=softgreen, draw=tealgreen] (resp) at (0, -1.0) {
+          \textbf{Mẫu Phản hồi Chuẩn $y^*$}\\
+          \texttt{<|assistant|> Lời giải... <|end|>}\\
+          Mặt nạ: $\mathbf{m_t = 1}$ (Tính lỗi)
+        };
+
+        \node[trainmodel, text width=3.4cm, minimum height=2.6cm] (llm) at (4.7, 0) {
+          \textbf{Mô hình Chính sách $\pi_\theta$}\\
+          (Đang tối ưu hóa)\\[6pt]
+          \normalfont\scriptsize Biểu diễn ngữ cảnh nối ghép $[x \oplus y^*]$ qua Causal Self-Attention
+        };
+
+        \node[rewardbox, text width=3.3cm, minimum height=1.5cm] (prob) at (9.2, 0) {
+          \textbf{Phân phối Xác suất}\\
+          $\pi_\theta(y_t^* \mid x, y_{<t}^*)$\\[3pt]
+          (Tại các vị trí $m_t = 1$)
+        };
+
+        \node[lossbox, text width=3.3cm, minimum height=1.5cm] (loss) at (13.6, 0) {
+          \textbf{Hàm Mất mát SFT}\\
+          $\mathcal{L}_{\text{SFT}}(\theta) = -\sum \log \pi_\theta$\\[3pt]
+          \normalfont\scriptsize Chỉ tích lũy trên miền $y^*$
+        };
+
+        \draw[flow] (prompt.east) -- (llm.west |- prompt.east);
+        \draw[flow] (resp.east) -- (llm.west |- resp.east);
+        \draw[flow] (llm.east) -- (prob.west);
+        \draw[flow] (prob.east) -- (loss.west);
+
+        \coordinate (grad_start) at (13.6, -2.05);
+        \coordinate (grad_end) at (4.7, -2.05);
+        \draw[gradflow] (loss.south) -- (grad_start) -- node[below, font=\scriptsize\sffamily\bfseries, text=stanfordred] {Lan truyền ngược Gradient $\nabla_\theta \mathcal{L}_{\text{SFT}}$ cập nhật tham số $\theta$} (grad_end) -- (llm.south);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{-0.05cm}
+  \footnotesize
+  \textbf{Nguyên lý tính toán:} Truy vấn $x$ tham gia tính ma trận Key--Value Attention ở lượt truyền thuận, nhưng bị khóa đạo hàm ở lượt truyền ngược nhờ mặt nạ $m_t = 0$.
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: CÔNG THỨC TOÁN HỌC CỦA SFT & TẠI SAO CHỈ TÍNH LỖI TRÊN y*
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.2: Cơ sở Toán học của Tinh chỉnh có Giám sát (SFT)}{Ước lượng Hợp lý Cực đại có Điều kiện (Conditional Maximum Likelihood Estimation)}
+  \begin{block}{Công thức 2: Hàm Mất mát Tinh chỉnh có Giám sát (Conditional MLE Loss)}
+    \[
+      \mathcal{L}_{\text{SFT}}(\theta) = -\E_{(x, y^*) \sim \mathcal{D}_{\text{SFT}}} \left[ \sum_{t=1}^{|y^*|} \log \pi_\theta\big(y_t^* \;\big|\; x, y_1^*, \dots, y_{t-1}^*\big) \right]
+    \]
+  \end{block}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.51\textwidth}
+      \subhead{Bản chất Giải tích}
+      \small
+      \begin{itemize}\setlength{\itemsep}{6pt}
+        \item \textbf{Quy tắc dây chuyền xác suất:}
+          $\log \pi_\theta(y^* \mid x) = \sum_{t=1}^{|y^*|} \log \pi_\theta(y_t^* \mid x, y_{<t}^*)$.
+        \item \textbf{Tương đương Phân kỳ KL Thuận:}
+          $\argmin_\theta \mathcal{L}_{\text{SFT}}(\theta) \equiv \argmin_\theta \DKL(P_{\text{data}} \parallel \pi_\theta)$.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \limithead{Lý do loại trừ $\log \pi_\theta(x)$}
+      \small
+      \begin{itemize}\setlength{\itemsep}{6pt}
+        \item Chỉ tối ưu hóa phân phối có điều kiện $P(Y \mid X)$, không mô hình hóa phân phối biên $P(X)$.
+        \item Tập trung toàn bộ dung lượng tham số vào miền sinh phản hồi $y^*$.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: GIẢ THUYẾT LIMA & LỌC MẪU REJECTION SAMPLING
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.2: Giả thuyết Căn chỉnh Bề mặt (LIMA) \& Lọc Mẫu Tổng hợp}{Vai trò của Chất lượng Dữ liệu (Zhou et al., 2023) và Hiện tượng Suy thoái Phân phối (Shumailov et al., 2024)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \motivehead{1. Giả thuyết LIMA (2023)}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Căn chỉnh bề mặt (Superficial Alignment):} Tri thức cốt lõi đã nằm trong Base Model; SFT chỉ ánh xạ biểu diễn nội tại ra định dạng giao tiếp chuẩn.
+        \item \textbf{Ưu tiên chất lượng hơn số lượng:} $1{,}000$ mẫu chuẩn xác cao vượt trội so với $50{,}000$ mẫu thu thập đại trà chứa nhiễu.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \limithead{2. Lọc Mẫu \& Suy thoái Phân phối}
+      \footnotesize
+      \begin{itemize}\setlength{\itemsep}{5pt}
+        \item \textbf{Lọc mẫu theo ngưỡng (Rejection Sampling):} Sinh $N$ ứng viên $\{y_1, \dots, y_N\} \sim \pi_\theta$, dùng hàm đánh giá lọc lấy mẫu đạt điểm cao nhất đưa vào $\mathcal{D}_{\text{SFT}}$.
+        \item \textbf{Suy thoái phân phối (Model Collapse):} Huấn luyện đệ quy trên dữ liệu tổng hợp không kiểm chứng làm co hẹp miền giá trị (\textit{Support Shrinkage}) và mất phương sai vùng đuôi.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\subsection{1.3. Tổng kết Phần 1 (SFT): Thành tựu \& Các Vấn đề Tồn đọng cho Phần 2}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ TEACHER FORCING VS AUTOREGRESSIVE
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.3: Điểm Nghẽn Lý thuyết của SFT --- Sự Lệch Phân phối Tiếp xúc}{Đối chiếu Cơ chế Teacher Forcing lúc Huấn luyện và Giải mã Tự hồi quy lúc Suy diễn}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[rewardbox, text width=3.2cm, minimum height=1.15cm] (tf_label) at (0, 1.05) {
+          \textbf{1. Khi Huấn luyện}\\(Teacher Forcing)
+        };
+        \node[data, text width=2.3cm, minimum height=1.0cm] (tf1) at (3.5, 1.05) {Token chuẩn $y_1^*$};
+        \node[data, text width=2.3cm, minimum height=1.0cm] (tf2) at (6.5, 1.05) {Token chuẩn $y_2^*$};
+        \node[data, text width=2.3cm, minimum height=1.0cm] (tf3) at (9.5, 1.05) {Token chuẩn $y_3^*$};
+        \node[rewardbox, text width=3.9cm, minimum height=1.15cm] (tf_res) at (13.5, 1.05) {
+          Tiền tố điều kiện luôn thuộc\\phân phối chuẩn $y_{<t}^* \sim P_{\text{data}}$
+        };
+
+        \draw[flow] (tf_label.east) -- (tf1.west);
+        \draw[flow] (tf1.east) -- (tf2.west);
+        \draw[flow] (tf2.east) -- (tf3.west);
+        \draw[flow] (tf3.east) -- (tf_res.west);
+
+        \node[lossbox, text width=3.2cm, minimum height=1.15cm] (ar_label) at (0, -1.05) {
+          \textbf{2. Khi Suy diễn}\\(Autoregressive Rollout)
+        };
+        \node[data, text width=2.3cm, minimum height=1.0cm] (ar1) at (3.5, -1.05) {Tự sinh $\hat{y}_1$};
+        \node[lossbox, text width=2.3cm, minimum height=1.0cm] (ar2) at (6.5, -1.05) {Sai lệch $\hat{y}_2$};
+        \node[lossbox, text width=2.3cm, minimum height=1.0cm] (ar3) at (9.5, -1.05) {Trượt quỹ đạo $\hat{y}_3$};
+        \node[lossbox, text width=3.9cm, minimum height=1.15cm] (ar_res) at (13.5, -1.05) {
+          Tích lũy sai số theo độ dài $T$:\\$P(\text{Quỹ đạo đúng}) = (1-\epsilon)^T \to 0$
+        };
+
+        \draw[flow] (ar_label.east) -- (ar1.west);
+        \draw[gradflow] (ar1.east) -- (ar2.west);
+        \draw[gradflow] (ar2.east) -- (ar3.west);
+        \draw[gradflow] (ar3.east) -- (ar_res.west);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.08cm}
+  \begin{alertblock}{Sự Dịch chuyển Phân phối Trạng thái (Covariate Shift -- Ross et al., 2011)}
+    \footnotesize
+    Khi huấn luyện: $s_t = (x, y_{<t}^*) \sim P_{\text{data}}$. Khi suy diễn: $\hat{s}_t = (x, \hat{y}_{<t}) \sim \pi_\theta$. Với sai số bước $\epsilon = 0.01$ và độ dài $T = 200$, xác suất giữ đúng quỹ đạo giảm còn $(0.99)^{200} \approx 13.4\%$.
+  \end{alertblock}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG KẾT PHẦN 1 (1/2): NHỮNG GÌ ĐÃ ĐẠT ĐƯỢC & TỐI ƯU SO VỚI PRE-TRAINING
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.3: Tổng kết Phần 1 (1 / 2) --- Thành tựu Đạt được so với Tiền huấn luyện}{Đánh giá Đóng góp của Tinh chỉnh có Giám sát (2021--2022) so với Base Model (2020)}
+  \motivehead{Những gì SFT Đã Giải quyết \& Tối ưu hơn so với Pre-training}
+  \vspace{0.05cm}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.32}
+  \begin{tabularx}{\textwidth}{@{}p{3.4cm} X X@{}}
+    \toprule
+    \textbf{Tiêu chí Đánh giá} & \textbf{Tiền huấn luyện -- Base Model (2020)} & \textbf{Tinh chỉnh SFT (Phần 1 -- 2021--2022)} \\
+    \midrule
+    \textbf{1. Hàm mục tiêu} & $\mathcal{L}_{\text{MLE}}(u_t \mid u_{<t})$ trên toàn chuỗi & $\mathcal{L}_{\text{SFT}}(y_t^* \mid x, y_{<t}^*)$ với mặt nạ $m_t = 0$ trên $x$ \\
+    \hline
+    \textbf{2. Chế độ vận hành} & Chỉ nối tiếp văn bản, phụ thuộc mồi mẫu Few-shot & \textbf{\textcolor{tealgreen}{Khắc phục Objective Mismatch}}: Giải quyết chỉ thị trực tiếp ở chế độ Zero-shot \\
+    \hline
+    \textbf{3. Kiểm soát độ dài} & Sinh tràn lan tới giới hạn cửa sổ ngữ cảnh & Ước lượng chính xác xác suất dừng chuỗi tại \texttt{<EOS>} \\
+    \hline
+    \textbf{4. Độ phức tạp hệ thống} & Hàng nghìn tỷ token, chi phí tính toán khổng lồ & Chỉ cần $10^3\text{--}10^5$ mẫu trên \textbf{1 mô hình} ($\pi_\theta$), tối ưu hóa lồi cục bộ ổn định \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG KẾT PHẦN 1 (2/2): VẤN ĐỀ TỒN ĐỌNG MÀ PHẦN 2 (RLHF + PPO) GIẢI QUYẾT
+% ----------------------------------------------------------------------------
+\begin{frame}{Phần 1.3: Tổng kết Phần 1 (2 / 2) --- Các Vấn đề Tồn đọng Dẫn tới Phần 2 (RLHF)}{Ba Giới hạn Cấu trúc của SFT mà Giai đoạn 2 (RLHF + PPO, 2022) Giải quyết}
+  \limithead{Ba Bài toán Mở mà SFT Không thể Tự Giải quyết}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{6pt}
+    \item \textbf{Lệch Phân phối Tiếp xúc (Exposure Bias):}\\
+      \footnotesize Mô hình chỉ quan sát tiền tố mẫu $y_{<t}^* \sim P_{\text{data}}$, chưa bao giờ được huấn luyện trên chuỗi tự sinh $\hat{y} \sim \pi_\theta$.
+    \item \textbf{Kích thích Ảo giác Ngoại lai (Extrinsic Hallucination):}\\
+      \footnotesize Cực đại hóa $\log \pi_\theta(y^* \mid x)$ trên cả tri thức nằm ngoài Base Model khiến mô hình suy giảm hiệu chỉnh xác suất (Miscalibration) và sinh thông tin bịa đặt.
+    \item \textbf{Thiếu vắng Tín hiệu từ Mẫu Âm (Absence of Negative Samples):}\\
+      \footnotesize SFT chỉ gia tăng xác suất cho mẫu dương chuẩn $y^*$ ($\uparrow$), không có đạo hàm phạt ($\downarrow$) đối với các mẫu âm sai lệch $y_l$.
+  \end{enumerate}
+
+  \vspace{0.06cm}
+  \begin{exampleblock}{Bài toán Chuyển giao sang Phần 2 (RLHF \& PPO -- 2022)}
+    \footnotesize
+    Thiết kế cơ chế học từ \textbf{cặp đối chiếu gồm Mẫu dương $y_w$ và Mẫu âm $y_l$}, kết hợp lấy mẫu trực tuyến $\hat{y} \sim \pi_\theta$ để khử \textit{Exposure Bias}.
+  \end{exampleblock}
+\end{frame}

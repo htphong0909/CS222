@@ -1,0 +1,151 @@
+\documentclass[11pt,a4paper,oneside]{report}
+
+% ============================================================================
+% GÓI NGÔN NGỮ TIẾNG VIỆT & BẢNG MÃ FONT
+% ============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\shorthandoff{"}
+
+% ============================================================================
+% CẤU HÌNH TRANG & BỐ CỤC
+% ============================================================================
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+
+% ============================================================================
+% CÁC GÓI TOÁN HỌC TRỰC QUAN
+% ============================================================================
+\usepackage{amsmath, amssymb, amsfonts, amsthm, mathtools, bm}
+\allowdisplaybreaks
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\Var}{\mathrm{Var}}
+\DeclareMathOperator{\DKL}{\mathbb{D}_{\mathrm{KL}}}
+\DeclareMathOperator{\clip}{\mathrm{clip}}
+\DeclareMathOperator{\mean}{\mathrm{mean}}
+\DeclareMathOperator{\std}{\mathrm{std}}
+\DeclareMathOperator{\Softmax}{\mathrm{Softmax}}
+\newcommand{\cancel}[1]{\textcolor{stanfordred}{\underbrace{#1}_{\text{Triệt tiêu}}}}
+
+% ============================================================================
+% BẢNG BIỂU, ĐỒ HỌA & MÀU SẮC
+% ============================================================================
+\usepackage{booktabs, longtable, tabularx, array, multirow}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc, fit, backgrounds}
+
+\definecolor{stanfordred}{RGB}{140, 21, 21}
+\definecolor{darkblue}{RGB}{0, 51, 102}
+\definecolor{darkgreen}{RGB}{0, 100, 50}
+\definecolor{amber}{RGB}{180, 100, 0}
+
+% ============================================================================
+% CÁC MÔI TRƯỜNG SƯ PHẠM DÀNH RIÊNG CHO AI ENGINEER
+% ============================================================================
+\theoremstyle{definition}
+\newtheorem{mentalmodel}{Mô hình Tư duy Kỹ sư (Engineering Intuition)}[chapter]
+\newtheorem{mathdecode}{Giải mã Công thức bằng Con số Thực tế}[chapter]
+\newtheorem{debate}{Hỏi Xoáy Đáp Xoay \& Phản biện Kỹ thuật}[chapter]
+\newtheorem{caseexample}{Ví dụ Thực chiến \& Minh họa}[chapter]
+\newtheorem{engtakeaway}{Quy tắc Thực chiến (Engineering Rule of Thumb)}[chapter]
+
+% ============================================================================
+% TRÍCH DẪN HỌC THUẬT & SIÊU LIÊN KẾT
+% ============================================================================
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks=true, linkcolor=darkblue, citecolor=stanfordred, urlcolor=darkblue]{hyperref}
+
+% ============================================================================
+% THÔNG TIN TÀI LIỆU
+% ============================================================================
+\title{
+    \vspace{-1.8cm}
+    {\Large \textbf{CẨM NANG THỰC CHIẾN \& BÀI GIẢNG CHUYÊN SÂU CHO AI ENGINEER}}\\[0.4cm]
+    {\LARGE \textbf{\textcolor{stanfordred}{GIẢI MÃ TOÀN DIỆN POST-TRAINING CHO LLMs (CẬP NHẬT 2026):}}}\\[0.25cm]
+    {\Large \textbf{Từ Bản chất Toán học Trực quan, Hỏi--Đáp Phản biện, Ví dụ Con số Cụ thể\\đến Kiến trúc Hệ thống SFT, RLHF/PPO, DPO, Reasoning RL/GRPO \& Distillation}}\\[0.7cm]
+    {\normalsize \textit{Thiết kế dành riêng cho Software Engineer \& AI Engineer: Không nặng chứng minh hàn lâm,\\giải thích tường tận mọi câu hỏi ``Tại sao?'', ``Nếu không làm vậy thì sao?'' bằng ví dụ thực tế}}
+}
+\author{
+    \textbf{Tài liệu Đào tạo Kỹ sư AI Chuyên sâu (Phiên bản Engineering Playbook)}\\
+    \textit{Cầu nối từ kiến thức Pre-training cơ bản đến làm chủ toàn bộ công nghệ Post-Training hiện đại nhất (2026)}
+}
+\date{Phiên bản Cập nhật Công nghệ 2026 -- Xác thực Trích dẫn Học thuật 100\%}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent
+Khi đọc các bài báo học thuật về Post-Training (như InstructGPT, PPO, DPO, DeepSeek-R1 hay MiniLLM), hầu hết các Kỹ sư AI (\textit{AI Engineers}) và Kỹ sư Phần mềm thường gặp phải một rào cản lớn: các tài liệu hoặc quá hàn lâm với hàng trang chứng minh định lý trừu tượng, hoặc quá sơ sài chỉ dạy cách gọi thư viện mà không giải thích bản chất bên dưới. Hệ quả là người đọc luôn mang trong mình hàng chục câu hỏi \textit{``Tại sao công thức lại có dấu trừ ở đây?''}, \textit{``Tại sao không dùng luôn RAG mà phải SFT?''}, \textit{``Tại sao chỉ chấm Đúng/Sai ở đáp số cuối mà mô hình lại tự biết suy nghĩ dài hàng nghìn chữ?''}, hay \textit{``Tại sao huấn luyện DPO một lúc thì cả câu đúng lẫn câu sai đều tụt xác suất?''}.
+
+\vspace{0.3cm}
+\noindent
+Bộ tài liệu \textbf{Phiên bản Kỹ sư (AI Engineer Edition)} này được biên soạn để giải quyết triệt để vấn đề đó. Chúng tôi \textbf{giữ lại đầy đủ các công thức toán học cốt lõi}, nhưng thay vì chứng minh giải tích nặng nề, mỗi công thức đều được đi kèm với:
+\begin{enumerate}[leftmargin=1.4cm]
+    \item \textbf{Mô hình Tư duy Kỹ sư (Engineering Intuition):} Giải thích cơ chế vật lý và động lực thiết kế trước khi viết phương trình.
+    \item \textbf{Giải mã Công thức bằng Con số Thực tế (Math-to-Numbers):} Thay trực tiếp các con số cụ thể (như xác suất $0.8$, $0.2$, điểm thưởng $+1$, $-1$) vào từng biến số để người đọc tự tính nhẩm và thấy ngay công thức hoạt động ra sao.
+    \item \textbf{Hỏi Xoáy Đáp Xoay \& Phản biện Kỹ thuật (Critical Q\&A):} Đặt ra những câu hỏi phản biện sắc bén nhất mà một kỹ sư thực chiến sẽ thắc mắc và giải đáp tận gốc từng trường hợp biên (\textit{edge cases}).
+    \item \textbf{Kiến thức Cập nhật đến 2026:} Bổ sung toàn bộ bức tranh công nghệ mới nhất gồm \textbf{Khung quyết định RAG vs. SFT vs. RL}, kỹ thuật tổng hợp dữ liệu \textbf{Magpie} \& bẫy \textbf{Model Collapse}, thuật toán \textbf{RLOO}, \textbf{Generative Reward Models (GenRM)}, \textbf{Dr. GRPO}, \textbf{DAPO}, kiểm soát \textbf{Overthinking} \& \textbf{Budget Forcing (s1)}, \textbf{Agentic RL (Search-R1)} và kỹ thuật \textbf{Hợp nhất Mô hình (Model Merging -- TIES/DARE)}.
+\end{enumerate}
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+% BẢN ĐỒ TỔNG QUAN & KHUNG QUYẾT ĐỊNH KỸ THUẬT CHO AI ENGINEER
+% ============================================================================
+\chapter*{Bản Đồ Tư Duy \& Khung Quyết Định Chọn Phương Pháp Cho AI Engineer}
+\addcontentsline{toc}{chapter}{Bản Đồ Tư Duy \& Khung Quyết Định Chọn Phương Pháp Cho AI Engineer}
+
+Trước khi đi vào từng chương, một Kỹ sư AI đứng trước bài toán thực tế của công ty luôn phải trả lời câu hỏi đầu tiên: \textbf{``Khi nào tôi chỉ cần Prompt / RAG, khi nào cần SFT, khi nào phải dùng DPO, và khi nào cần đến RLVR/GRPO hay Distillation?''} Bảng dưới đây là kim chỉ nam xuyên suốt toàn bộ tài liệu này:
+
+\begin{table}[h!]
+\centering
+\small
+\renewcommand{\arraystretch}{1.38}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{2.7cm} p{3.6cm} X p{3.4cm}}
+\toprule
+Phương pháp & Khi nào NÊN dùng? & Khi nào TUYỆT ĐỐI KHÔNG dùng? & Chi phí Dữ liệu \& Phần cứng \\
+\midrule
+Prompting + RAG \newline \citep{ovadia2024fine} & Khi cần nạp \textbf{kiến thức sự kiện mới}, tài liệu nội bộ công ty thay đổi liên tục và cần trích dẫn nguồn chính xác. & Khi mô hình chưa biết định dạng đầu ra phức tạp, giọng văn sai lệch hoặc năng lực suy luận logic gốc quá yếu. & Rẻ nhất (Không cần huấn luyện lại trọng số). \\
+\midrule
+SFT \newline \textit{(Chương 1)} \newline \citep{zhou2023lima, dubey2024llama} & Khi cần dạy mô hình \textbf{giao thức hội thoại}, định dạng đầu ra chuẩn (JSON/SQL/Tool Call), văn phong đặc thù hoặc khởi động lạnh (\textit{Cold-start}) trước khi chạy RL. & \textbf{Không dùng SFT để nhồi kiến thức mới mà Base Model chưa biết} -- vì sẽ dạy mô hình bệnh nói dối tự tin (\textit{Hallucination}) \citep{gekhman2024does}. & Trung bình (Cần $1,000$ đến $100,000+$ mẫu lời giải chuẩn $(x, y^*)$, chỉ tốn 1 mô hình trên VRAM). \\
+\midrule
+DPO / SimPO / KTO \newline \textit{(Chương 3)} \newline \citep{rafailov2023direct, meng2024simpo} & Khi mô hình SFT đã biết trả lời nhưng cần \textbf{uốn nắn sở thích tinh tế} (giọng văn tự nhiên hơn, giảm từ chối vô lý, an toàn hơn, sửa các lỗi sai điển hình qua cặp Đúng $y_w$ -- Sai $y_l$). & Khi bài toán đòi hỏi suy luận Toán/Code dài hàng chục nghìn bước và cần mô hình tự khám phá cách giải mới vượt ngoài tập dữ liệu sẵn có. & Khá nhẹ (Cần cặp so sánh $(x, y_w, y_l)$ hoặc nhãn Like/Dislike; chỉ tốn 1--2 mô hình, không cần sinh mẫu RL). \\
+\midrule
+RLVR + GRPO / DAPO \newline \textit{(Chương 4)} \newline \citep{shao2024deepseekmath, deepseek2025r1, yu2025dapo} & Khi bài toán có \textbf{Bộ kiểm chứng Đúng/Sai rõ ràng} (Toán học, Viết Code có Unit Test, Suy luận Logic, Gọi Tool/Search nhiều bước) và muốn kích hoạt tư duy Hệ thống 2 ($\langle\text{think}\rangle$). & Khi bài toán mang tính cảm tính mở (như viết thơ, tâm sự) mà không có hàm kiểm tra kết quả rõ ràng. & Rất nặng về thời gian sinh mẫu (\textit{Rollout}) trên GPU, nhưng không cần con người viết sẵn lời giải mẫu! \\
+\midrule
+Model Distillation \& Merging \newline \textit{(Chương 5)} \newline \citep{gu2024minillm, yadav2023ties} & Khi đã có mô hình lớn (ví dụ 70B--671B) rất thông minh nhưng chạy quá chậm/đắt, cần \textbf{nén năng lực sang mô hình nhỏ (1.5B--8B)} để chạy thực tế; hoặc cần gộp nhiều mô hình chuyên biệt lại. & Khi mô hình giáo viên (\textit{Teacher}) cũng chưa giải được bài toán hoặc dữ liệu chắt lọc không được kiểm duyệt chất lượng. & Rất hiệu quả khi triển khai sản phẩm (\textit{Production Serving}), giảm 10--50 lần chi phí suy luận. \\
+\bottomrule
+\end{tabularx}
+\caption{Ma trận quyết định lựa chọn kỹ thuật Post-Training thực chiến cho AI Engineer (2026).}
+\end{table}
+
+% ============================================================================
+% NẠP NỘI DUNG 6 CHƯƠNG CHUYÊN SÂU DÀNH CHO ENGINEER
+% ============================================================================
+\input{chapters/ch01_big_picture_sft}
+\input{chapters/ch02_rl_rlhf_ppo}
+\input{chapters/ch03_dpo_variants}
+\input{chapters/ch04_reasoning_rlvr_grpo}
+\input{chapters/ch05_distillation_merging}
+\input{chapters/ch06_systems_eval_playbook}
+
+% ============================================================================
+% TÀI LIỆU THAM KHẢO
+% ============================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

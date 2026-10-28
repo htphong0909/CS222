@@ -1,0 +1,181 @@
+\documentclass[10pt,aspectratio=169,t]{beamer}
+
+% ============================================================================
+% GÓI NGÔN NGỮ TIẾNG VIỆT & BẢNG MÃ FONT
+% ============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\shorthandoff{"}
+\AtBeginDocument{\shorthandoff{"}}
+
+% ============================================================================
+% CÁC GÓI TOÁN HỌC & ĐỒ HỌA TIKZ
+% ============================================================================
+\usepackage{amsmath, amssymb, amsfonts, mathtools, bm}
+\usepackage{booktabs, tabularx, array, multirow}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc, fit, backgrounds}
+
+% Toán tử tuỳ chỉnh
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\DKL}{D_{\mathrm{KL}}}
+\DeclareMathOperator{\clip}{\mathrm{clip}}
+\DeclareMathOperator{\mean}{\mathrm{mean}}
+\DeclareMathOperator{\std}{\mathrm{std}}
+\newcommand{\cancel}[1]{\textcolor{stanfordred}{\underbrace{#1}_{\text{Triệt tiêu } = 0}}}
+
+% ============================================================================
+% CẤU HÌNH GIAO DIỆN BEAMER HỌC THUẬT (16:9)
+% ============================================================================
+\usetheme{Madrid}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+
+\definecolor{stanfordred}{RGB}{140, 21, 21}
+\definecolor{navyblue}{RGB}{15, 45, 90}
+\definecolor{tealgreen}{RGB}{0, 110, 90}
+\definecolor{amberorange}{RGB}{195, 95, 0}
+\definecolor{softblue}{RGB}{238, 245, 253}
+\definecolor{softred}{RGB}{253, 240, 240}
+\definecolor{softgreen}{RGB}{236, 248, 241}
+\definecolor{softyellow}{RGB}{254, 250, 235}
+\definecolor{slate}{RGB}{70, 80, 95}
+
+\setbeamercolor{structure}{fg=navyblue}
+\setbeamercolor{palette primary}{bg=navyblue, fg=white}
+\setbeamercolor{palette secondary}{bg=stanfordred, fg=white}
+\setbeamercolor{palette tertiary}{bg=navyblue!90!black, fg=white}
+\setbeamercolor{frametitle}{bg=navyblue, fg=white}
+\setbeamercolor{framesubtitle}{fg=softyellow!95!white}
+\setbeamercolor{title}{bg=navyblue, fg=white}
+
+\setbeamercolor{block title}{bg=navyblue, fg=white}
+\setbeamercolor{block body}{bg=softblue, fg=black}
+
+\setbeamercolor{block title alerted}{bg=stanfordred, fg=white}
+\setbeamercolor{block body alerted}{bg=softred, fg=black}
+
+\setbeamercolor{block title example}{bg=tealgreen, fg=white}
+\setbeamercolor{block body example}{bg=softgreen, fg=black}
+
+\setbeamertemplate{itemize items}[circle]
+\setbeamertemplate{enumerate items}[default]
+\setbeamertemplate{section in toc}[sections numbered]
+\setbeamertemplate{subsection in toc}[subsections numbered]
+
+\setbeamerfont{frametitle}{size=\normalsize,series=\bfseries}
+\setbeamerfont{framesubtitle}{size=\footnotesize,series=\mdseries}
+
+% Tự động chèn Slide Mục lục Chuyển Phần ở đầu mỗi Phần lớn
+\AtBeginSection[]{
+  \begin{frame}{Mục lục Tiến trình Seminar (2020--2026)}{Cấu trúc Học thuật \& Vị trí Phần Hiện tại}
+    \scriptsize
+    \tableofcontents[currentsection, subsectionstyle=show/show/hide]
+  \end{frame}
+}
+
+% Định nghĩa tiêu đề phân mục phẳng
+\newcommand{\subhead}[1]{%
+  \vspace{0.10cm}%
+  {\normalsize\bfseries\textcolor{navyblue}{#1}}\par\vspace{0.04cm}%
+  {\color{navyblue!40}\hrule height 0.6pt}\vspace{0.10cm}%
+}
+\newcommand{\limithead}[1]{%
+  \vspace{0.10cm}%
+  {\normalsize\bfseries\textcolor{stanfordred}{#1}}\par\vspace{0.04cm}%
+  {\color{stanfordred!45}\hrule height 0.6pt}\vspace{0.10cm}%
+}
+\newcommand{\motivehead}[1]{%
+  \vspace{0.10cm}%
+  {\normalsize\bfseries\textcolor{tealgreen}{#1}}\par\vspace{0.04cm}%
+  {\color{tealgreen!45}\hrule height 0.6pt}\vspace{0.10cm}%
+}
+
+\AtBeginDocument{%
+  \setlength{\abovedisplayskip}{5pt}%
+  \setlength{\belowdisplayskip}{5pt}%
+  \setlength{\abovedisplayshortskip}{3pt}%
+  \setlength{\belowdisplayshortskip}{3pt}%
+}
+
+% Footer học thuật
+\setbeamertemplate{footline}{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.26\paperwidth,ht=2.4ex,dp=1ex,left]{author in head/foot}%
+    \hspace*{2ex}\usebeamerfont{author in head/foot}\textbf{Seminar Học thuật: Post-Training (2020--2026)}
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.56\paperwidth,ht=2.4ex,dp=1ex,center]{title in head/foot}%
+    \usebeamerfont{title in head/foot}\insertsectionhead
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.18\paperwidth,ht=2.4ex,dp=1ex,right]{date in head/foot}%
+    \textbf{Trang \insertframenumber{} / \inserttotalframenumber}\hspace*{2ex}
+  \end{beamercolorbox}}%
+  \vskip0pt%
+}
+
+% ============================================================================
+% ĐỊNH NGHĨA STYLE TIKZ CHO CÁC SƠ ĐỒ LUỒNG DỮ LIỆU
+% ============================================================================
+\tikzset{
+  >=Stealth,
+  data/.style={
+    rectangle, rounded corners=4pt, draw=amberorange!85!black, line width=0.9pt,
+    fill=softyellow, text width=3.0cm, align=center, minimum height=0.95cm, inner sep=4pt, font=\scriptsize\sffamily
+  },
+  trainmodel/.style={
+    rectangle, rounded corners=4pt, draw=navyblue, line width=1.1pt,
+    fill=softblue, text width=3.1cm, align=center, minimum height=1.05cm, inner sep=4pt, font=\scriptsize\sffamily\bfseries
+  },
+  frozenmodel/.style={
+    rectangle, rounded corners=4pt, draw=slate, line width=0.9pt, dashed,
+    fill=gray!12, text width=3.1cm, align=center, minimum height=1.05cm, inner sep=4pt, font=\scriptsize\sffamily
+  },
+  rewardbox/.style={
+    rectangle, rounded corners=4pt, draw=tealgreen, line width=1.0pt,
+    fill=softgreen, text width=3.0cm, align=center, minimum height=0.95cm, inner sep=4pt, font=\scriptsize\sffamily
+  },
+  lossbox/.style={
+    rectangle, rounded corners=4pt, draw=stanfordred, line width=1.1pt,
+    fill=softred, text width=3.2cm, align=center, minimum height=1.0cm, inner sep=4pt, font=\scriptsize\sffamily\bfseries
+  },
+  flow/.style={->, line width=1.05pt, draw=navyblue!85!black, rounded corners=3pt},
+  gradflow/.style={->, line width=1.1pt, draw=stanfordred, dashed, rounded corners=3pt}
+}
+
+% ============================================================================
+% THÔNG TIN BÀI SEMINAR KHOA HỌC
+% ============================================================================
+\title[Seminar: Post-Training cho LLMs]{CƠ SỞ TOÁN HỌC VÀ SỰ TIẾN HÓA THUẬT TOÁN HẬU HUẤN LUYỆN MÔ HÌNH NGÔN NGỮ LỚN (2020--2026)}
+\subtitle{Phần 1: SFT (2020--2021) $\cdot$ Phần 2: RLHF \& PPO (2022) $\cdot$ Phần 3: DPO (2023--2024) $\cdot$ Phần 4: RLVR \& GRPO (2024--2026) $\cdot$ Phần 5: Chưng cất Tri thức}
+\author[Báo cáo Seminar Học thuật]{Chuyên đề Seminar Khoa học Máy tính \& Trí tuệ Nhân tạo}
+\institute[]{Giải tích Tối ưu hóa, Kiến trúc Luồng Dữ liệu và Động cơ Tiến hóa Phương pháp}
+\date{Thời lượng trình bày: 90--120 Phút}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \vspace{0.2cm}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Mục lục Tổng quan Báo cáo Seminar}{Tiến trình Lịch sử (2020--2026) \& Chưng cất Tri thức}
+  \scriptsize
+  \tableofcontents[hideallsubsections]
+  \vspace{0.15cm}
+  \begin{exampleblock}{Cấu trúc Tổng kết Cuối mỗi Phần}
+    \scriptsize
+    Kết thúc mỗi Phần đều tổng hợp rõ: \textbf{(1) Đóng góp toán học \& tối ưu hệ thống đạt được so với giai đoạn trước}, và \textbf{(2) Giới hạn tồn đọng chuyển giao cho Phần tiếp theo giải quyết}.
+  \end{exampleblock}
+\end{frame}
+
+\input{sections/part1_sft}
+\input{sections/part2_rlhf_ppo}
+\input{sections/part3_dpo_variants}
+\input{sections/part4_rlvr_grpo}
+\input{sections/part5_distillation_summary}
+
+\end{document}

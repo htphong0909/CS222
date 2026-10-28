@@ -1,0 +1,248 @@
+\chapter{Giải mã Học Tăng Cường (RL), RLHF, RLOO \& PPO cho Kỹ sư AI (Từ Con số 0)}
+\label{chap:rlhf_ppo_eng}
+\label{ch:rl_ppo}
+
+\begin{mentalmodel}[Sự khác biệt cốt lõi giữa Học có Giám sát (SFT) và Học Tăng Cường (RL)]
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Học có Giám sát (SFT)} giống như việc bạn bắt một học sinh \textbf{chép phạt bài văn mẫu của thầy giáo}: Thầy đọc từng chữ, trò chép theo từng chữ. Học sinh rất nhanh thuộc khuôn mẫu, nhưng hễ gặp đề bài lạ không có trong vở chép là học sinh vẫn viết giọng văn rất kêu nhưng nội dung bịa đặt hoàn toàn!
+    \item \textbf{Học Tăng Cường (RL)} giống như việc bạn bắt học sinh \textbf{tự ngồi viết bài luận hoàn chỉnh bằng chính chữ của mình}, sau đó thầy giáo mới cầm bút đỏ chấm điểm: bài nào viết đúng trọng tâm thì thưởng điểm cộng (để lần sau phát huy), bài nào bịa đặt hoặc lạc đề thì phạt điểm trừ (để lần sau chừa hẳn).
+\end{itemize}
+\end{mentalmodel}
+
+% ============================================================================
+\section{Ba ``Căn bệnh Bẩm sinh'' của SFT mà Kỹ sư nào cũng gặp}
+\label{sec:three_sins_of_sft}
+
+Trước khi bỏ công sức học về RL, một kỹ sư thực chiến sẽ hỏi: \textit{``Tại sao tôi chạy SFT xong, mô hình đã trả lời đúng định dạng rồi mà vẫn phải làm tiếp RLHF hay DPO?''}. Dưới đây là 3 căn bệnh bẩm sinh của SFT được chứng minh bởi các nghiên cứu năm 2024:
+
+\subsection{Căn bệnh 1: Dạy mô hình ``Nói dối không chớp mắt'' (Hallucination do Behavior Cloning)}
+Trong tập dữ liệu SFT, mọi câu hỏi $x$ đều đi kèm một câu trả lời mẫu $y^*$ cực kỳ chi tiết và tự tin do chuyên gia viết (hoặc do GPT-4 tra cứu tài liệu rồi viết ra).
+
+\begin{caseexample}[Cách SFT vô tình dạy mô hình bịa đặt \citep{kang2024unfamiliar, gekhman2024does}]
+Giả sử trong tập dữ liệu SFT có câu hỏi: \textit{``Hiệp ước Hòa bình Utrecht ngày 11/04/1713 gồm những điều khoản phụ nào?''}.
+\begin{itemize}[leftmargin=1.2cm]
+    \item Người viết dữ liệu SFT mở sách lịch sử ra tra cứu rồi viết một câu trả lời mẫu $y^*$ dài 300 chữ cực kỳ chuẩn xác.
+    \item Nhưng bản thân mô hình nhỏ 8B của bạn trong lúc Pre-training \textbf{chưa từng đọc hoặc không nhớ} chi tiết Hiệp ước này (bên trong mạng nơ-ron của nó hoàn toàn trống rỗng về sự kiện này).
+    \item Khi bạn ép mô hình 8B tối ưu hóa hàm mất mát SFT trên cặp $(x, y^*)$ đó, mô hình không thể tự dưng hiểu ra toàn bộ lịch sử châu Âu thế kỷ 18; thay vào đó, quy luật mà mạng nơ-ron rút ra được là: \textbf{``À! Hóa ra kể cả khi não mình hoàn toàn mù tịt và không biết câu trả lời, mình vẫn phải xuất ra những con số ngày tháng và điều khoản nghe thật trôi chảy, uyên bác và chắc nịch giống hệt đáp án mẫu!''}
+\end{itemize}
+\citet{kang2024unfamiliar} và \citet{gekhman2024does} (EMNLP 2024) đã chứng minh rằng: càng ép mô hình SFT học nhiều sự kiện nằm ngoài vùng kiến thức Pre-training của nó, tỷ lệ bịa đặt thông tin (\textit{Hallucination}) của mô hình trên mọi câu hỏi khác càng tăng vọt!
+\end{caseexample}
+
+\subsection{Căn bệnh 2: Sai một ly, đi một dặm (Exposure Bias \citealt{ranzato2016sequence, ross2011reduction})}
+Trong lúc huấn luyện SFT (cơ chế \textit{Teacher Forcing}), để đoán chữ thứ $t$, mô hình luôn được mớm sẵn $t-1$ chữ \textbf{đúng tuyệt đối của chuyên gia} $(y_1^*, y_2^*, \dots, y_{t-1}^*)$.
+Nhưng khi chạy thực tế trên Production, không có chuyên gia nào mớm chữ cho nó cả! Mô hình phải tự ăn lại chính những chữ do nó vừa sinh ra $(\hat{y}_1, \hat{y}_2, \dots, \hat{y}_{t-1})$. Nếu ở chữ thứ 10 nó lỡ chọn trượt 1 từ hơi lệch, toàn bộ ngữ cảnh phía sau sẽ rơi vào vùng đất lạ mà SFT chưa từng dạy, khiến sai số tích lũy phình to theo bình phương độ dài câu $\mathcal{O}(T^2)$ \citep{ross2011reduction}.
+
+\subsection{Căn bệnh 3: Chấm điểm máy móc từng từ \& Không có khái niệm về ``Câu trả lời Tệ''}
+Hàm Cross-Entropy của SFT chỉ biết so khớp từng chữ một với đáp án mẫu $y^*$:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Nếu đáp án mẫu là \textit{``Hà Nội là thủ đô của Việt Nam''}, mà mô hình viết \textit{``Thủ đô của nước Việt Nam là Hà Nội''} (ý nghĩa đúng 100\%), SFT lại phạt mô hình cực nặng vì lệch vị trí từ!
+    \item Ngược lại, nếu mô hình viết \textit{``Hà Nội \textbf{không} phải là thủ đô của Việt Nam''} (sai hoàn toàn bản chất), SFT lại chỉ phạt đúng 1 chữ \textit{``không''}, còn 7 chữ kia được khen là giống mẫu!
+    \item Hơn nữa, SFT chỉ có tín hiệu dương (kéo gần về mẫu $y^*$), chứ không có tín hiệu âm để chỉ tận tay cho mô hình biết những câu trả lời sai hay độc hại trông như thế nào để tránh xa.
+\end{itemize}
+
+% ============================================================================
+\section{Nhập môn Học Tăng Cường (RL) trong 10 Phút cho Kỹ sư AI}
+\label{sec:rl_10_mins}
+
+Nhiều kỹ sư ngại học RL vì thấy các thuật ngữ như \textit{Agent, Environment, State, Action, Trajectory, Policy Gradient}. Thực chất, khi áp dụng vào LLM, mọi khái niệm của RL đều chính là những thứ bạn đã biết ở Pre-training nhưng được gọi bằng cái tên mới \citep{sutton2018reinforcement}:
+
+\begin{table}[h!]
+\centering
+\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{3.6cm} >{\bfseries}p{2.2cm} X}
+\toprule
+Thuật ngữ trong RL & Ký hiệu & Thực chất trong Mô hình Ngôn ngữ (LLM) là gì? \\
+\midrule
+Tác tử / Chính sách (Agent / Policy) & $\pi_\theta(y_t \mid s_t)$ & Chính là \textbf{mô hình ngôn ngữ Transformer} của bạn (với bộ trọng số $\theta$). \\
+Trạng thái tại bước $t$ (State) & $s_t = (x, y_{<t})$ & Chuỗi văn bản hiện có trên màn hình: gồm câu hỏi $x$ và các chữ mô hình đã gõ ra trước đó $y_1, \dots, y_{t-1}$. \\
+Hành động tại bước $t$ (Action) & $a_t = y_t \in V$ & Việc mô hình \textbf{chọn ra 1 token tiếp theo} từ bảng từ vựng $128,000$ từ. \\
+Quỹ đạo / Một lượt chơi (Trajectory / Rollout) & $\tau = (x, y)$ & Quá trình mô hình tự gõ từ chữ đầu tiên $y_1$ cho đến khi gõ thẻ kết thúc $\langle|\text{im\_end}|\rangle$ ($y_T$), tạo thành cả câu trả lời hoàn chỉnh $y$. \\
+Phần thưởng (Reward) & $r(x, y) \in \mathbb{R}$ & Một \textbf{con số chấm điểm chất lượng} của cả câu trả lời $y$ sau khi mô hình đã trả lời xong (ví dụ: $+5.0$ nếu đúng, $-3.0$ nếu sai). \\
+\bottomrule
+\end{tabularx}
+\caption{Từ điển dịch thuật 1-1 từ ngôn ngữ Học tăng cường (RL) sang ngôn ngữ Kỹ sư LLM.}
+\label{tab:rl_dict_eng}
+\end{table}
+
+\subsection{Giải mã Công thức Đạo hàm Chính sách (Policy Gradient / REINFORCE)}
+Trong SFT, ta biết sẵn câu trả lời mẫu $y^*$. Còn trong RL, ta chỉ đưa câu hỏi $x$, bắt mô hình \textbf{tự sinh ra câu trả lời} $y = (y_1, \dots, y_T) \sim \pi_\theta(\cdot \mid x)$, sau đó chấm cho câu trả lời đó một điểm lợi thế $A \in \mathbb{R}$.
+Công thức cập nhật trọng số của RL (\textbf{Policy Gradient / REINFORCE} \citealt{williams1992simple, sutton1999policy}) đặt cạnh công thức của SFT trông như sau:
+
+\begin{align}
+    \text{\textbf{Đạo hàm của SFT:}} \quad \nabla_\theta \mathcal{J}_{\text{SFT}}(\theta) &= \sum_{t=1}^{T} \mathbf{(+1)} \cdot \nabla_\theta \log \pi_\theta(y_t^* \mid x, y_{<t}^*), \label{eq:sft_grad_eng} \\
+    \text{\textbf{Đạo hàm của RL:}} \quad \nabla_\theta \mathcal{J}_{\text{RL}}(\theta) &= \E_{y \sim \pi_\theta(\cdot \mid x)} \left[ \sum_{t=1}^{T} \mathbf{A(x, y)} \cdot \nabla_\theta \log \pi_\theta(y_t \mid x, y_{<t}) \right]. \label{eq:rl_grad_eng}
+\end{align}
+
+\begin{mathdecode}[Hiểu thấu đáo Policy Gradient chỉ trong 30 giây!]
+Hãy nhìn vào Phương trình~\eqref{eq:sft_grad_eng} và~\eqref{eq:rl_grad_eng}: Cụm $\nabla_\theta \log \pi_\theta(y_t \mid x, y_{<t})$ trong RL \textbf{chính là đạo hàm của hàm Cross-Entropy trong Pre-training và SFT}! Sự khác biệt duy nhất là con số nhân ở đằng trước:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Giả sử với câu hỏi $x =$ \textit{``Thủ đô của Úc là gì?''}, mô hình tự sinh thử 2 lần:
+    \item \textbf{Lần 1:} Mô hình tự sinh ra câu $y^{(1)} =$ \textit{``Thủ đô của Úc là Canberra.''} $\to$ Được chấm điểm lợi thế $\mathbf{A = +2.0}$.
+    Thay $A = +2.0$ vào Phương trình~\eqref{eq:rl_grad_eng}: Đạo hàm bằng $+2.0 \times \nabla_\theta \log \pi_\theta(\text{``Canberra''})$. Nghĩa là mô hình chạy một bước giống hệt SFT trên chính câu trả lời đúng của nó để \textbf{tăng xác suất chữ ``Canberra'' lên gấp đôi}!
+    \item \textbf{Lần 2:} Mô hình tự sinh ra câu $y^{(2)} =$ \textit{``Thủ đô của Úc là Sydney.''} $\to$ Bị chấm điểm lợi thế âm $\mathbf{A = -3.0}$.
+    Thay $A = -3.0$ vào Phương trình~\eqref{eq:rl_grad_eng}: Dấu trừ làm đảo ngược chiều đạo hàm thành $-3.0 \times \nabla_\theta \log \pi_\theta(\text{``Sydney''})$. Thay vì tăng xác suất, mô hình \textbf{đè giảm xác suất chữ ``Sydney'' xuống thật mạnh} để lần sau không bao giờ nhầm nữa!
+\end{itemize}
+\textbf{Tóm lại:} \textit{RL trên LLM thực chất chỉ là chạy Cross-Entropy có trọng số (Weighted Cross-Entropy) trên chính những câu trả lời do mô hình tự sinh ra, trong đó câu tốt mang trọng số dương (kéo lên) và câu dở mang trọng số âm (đẩy xuống)!}
+\end{mathdecode}
+
+\begin{debate}[Câu hỏi Kỹ sư số 4: ``Tại sao phải dùng Điểm Lợi Thế $A(x, y) = r(x, y) - b(x)$ (trừ đi mức trung bình $b(x)$) mà không lấy thẳng điểm thưởng $r(x, y)$ nhân vào công thức?'']
+Hãy xem một ví dụ bằng con số để thấy ngay tại sao không trừ đi mức trung bình $b(x)$ (\textit{Baseline}) sẽ gây ra thảm họa:
+Giả sử giám khảo chấm điểm trên thang từ $0$ đến $+10$ (mọi điểm số đều là số dương!):
+\begin{itemize}[leftmargin=1.2cm]
+    \item Câu trả lời xuất sắc (\textit{Canberra}) được chấm $r_1 = +9.0$.
+    \item Câu trả lời sai bét (\textit{Sydney}) vẫn được giám khảo vớt vát cho $r_2 = +2.0$ điểm trình bày.
+    \item \textbf{Nếu bạn nhân thẳng $r$ vào công thức RL:} Vì cả $+9.0$ và $+2.0$ đều là \textbf{số dương}, mô hình sẽ tăng xác suất cho cả câu đúng (\textit{Canberra}) LẪN câu sai (\textit{Sydney})! Câu sai vẫn được khen, chỉ là khen ít hơn câu đúng!
+    \item \textbf{Khi trừ đi mức điểm trung bình $b(x) = \frac{9.0 + 2.0}{2} = +5.5$:}
+    \begin{itemize}
+        \item Lợi thế của câu đúng: $A_1 = 9.0 - 5.5 = \mathbf{+3.5 > 0}$ (Được thưởng tăng xác suất!).
+        \item Lợi thế của câu sai: $A_2 = 2.0 - 5.5 = \mathbf{-3.5 < 0}$ (Lập tức biến thành số âm và bị phạt giảm xác suất!).
+    \end{itemize}
+\end{itemize}
+Về mặt toán học, người ta chứng minh được rằng việc trừ đi bất kỳ hằng số trung bình $b(x)$ nào chỉ phụ thuộc vào câu hỏi $x$ đều giữ cho kỳ vọng đạo hàm không hề bị chệch (\textit{Unbiased}: $\E_{y \sim \pi_\theta}[b(x)\nabla_\theta \log \pi_\theta(y \mid x)] = 0$), đồng thời giảm mạnh độ nhiễu (phương sai) khi huấn luyện \citep{williams1992simple, sutton2018reinforcement}.
+\end{debate}
+
+% ============================================================================
+\section{Reward Model (RM), Bradley--Terry \& Thế hệ Giám khảo Mới (GenRM 2025)}
+\label{sec:reward_model_eng}
+
+Trong các bài toán mở (như viết email, tóm tắt báo cáo, tư vấn khách hàng), làm sao máy tính biết câu trả lời nào hay, câu nào dở để cho điểm $r(x, y)$? Chúng ta phải huấn luyện một mạng nơ-ron thứ hai đóng vai trò ``Giám khảo chấm điểm'', gọi là \textbf{Mô hình Phần thưởng (Reward Model -- RM)} ký hiệu là $r_\phi(x, y)$ \citep{christiano2017deep, stiennon2020learning, ouyang2022training}.
+
+\subsection{Tại sao thu thập dữ liệu So sánh Cặp ($y_w \succ y_l$) thay vì bắt con người chấm điểm 1--10?}
+Nếu bạn thuê 10 người gán nhãn đọc các câu trả lời và chấm điểm từ $1$ đến $10$: ông A dễ tính toàn chấm $8, 9$; ông B khó tính chỉ chấm $5, 6$. Khi gộp dữ liệu lại, mạng nơ-ron sẽ bị loạn hoàn toàn.
+Nhưng nếu với cùng một câu hỏi $x$, bạn đưa ra 2 câu trả lời và hỏi: \textbf{``Câu nào tốt hơn?''} -- gọi câu thắng là $y_w$ (\textit{winner / chosen}) và câu thua là $y_l$ (\textit{loser / rejected}), thì 90\% người chấm sẽ đồng ý với nhau!
+
+\subsection{Giải mã Công thức Bradley--Terry \citep{bradley1952rank} bằng Con số Cụ thể}
+Làm sao huấn luyện mạng nơ-ron $r_\phi(x, y)$ chỉ từ các cặp thắng--thua $(x, y_w, y_l)$? Công thức \textbf{Bradley--Terry} phát biểu rằng xác suất để câu $y_w$ được thích hơn câu $y_l$ bằng hàm Sigmoid $\sigma(z) = \frac{1}{1 + e^{-z}}$ của hiệu hai điểm thưởng:
+\begin{equation}
+    P(y_w \succ y_l \mid x) = \sigma\Big( r_\phi(x, y_w) - r_\phi(x, y_l) \Big) = \frac{1}{1 + \exp\Big(-\big(r_\phi(x, y_w) - r_\phi(x, y_l)\big)\Big)}.
+    \label{eq:bt_prob}
+\end{equation}
+Và hàm mất mát để huấn luyện Reward Model là:
+\begin{equation}
+    \mathcal{L}_{\text{RM}}(\phi) = -\E_{(x, y_w, y_l)} \Big[ \log \sigma\big( r_\phi(x, y_w) - r_\phi(x, y_l) \big) \Big].
+    \label{eq:rm_loss_eng}
+\end{equation}
+
+\begin{mathdecode}[Tính nhẩm hàm mất mát Reward Model]
+Giả sử với câu hỏi $x$, con người đánh giá câu $y_w$ tốt hơn câu $y_l$:
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Trường hợp 1 (RM chấm sai):} Ban đầu RM chưa biết gì, nó chấm câu tốt $r_\phi(x, y_w) = 1.0$ và chấm câu dở $r_\phi(x, y_l) = 3.0$.
+    Hiệu số điểm: $1.0 - 3.0 = -2.0$.
+    Xác suất RM đoán $y_w$ thắng: $\sigma(-2.0) = \frac{1}{1 + e^{2}} \approx \mathbf{0.119}$ (chỉ $11.9\%$!).
+    Hàm mất mát: $\mathcal{L}_{\text{RM}} = -\log(0.119) \approx \mathbf{2.12}$ (Rất lớn $\to$ phạt nặng để ép RM phải tăng điểm $y_w$ và giảm điểm $y_l$).
+    \item \textbf{Trường hợp 2 (RM đã học thuộc bài):} Sau khi cập nhật, RM chấm câu tốt $r_\phi(x, y_w) = +4.5$ và câu dở $r_\phi(x, y_l) = +0.5$.
+    Hiệu số điểm: $4.5 - 0.5 = +4.0$.
+    Xác suất RM đoán $y_w$ thắng: $\sigma(+4.0) = \frac{1}{1 + e^{-4}} \approx \mathbf{0.982}$ ($98.2\%$!).
+    Hàm mất mát: $\mathcal{L}_{\text{RM}} = -\log(0.982) \approx \mathbf{0.018 \approx 0}$ (Mất mát tiến về 0!).
+\end{itemize}
+\textbf{Đặc tính cực kỳ thú vị (Tính bất biến tịnh tiến):} Vì công thức chỉ lấy hiệu số $r_\phi(x, y_w) - r_\phi(x, y_l)$, nên việc RM chấm $(+4.5 \text{ và } +0.5)$ hay chấm $(+104.5 \text{ và } +100.5)$ đều cho hiệu số bằng $+4.0$ và xác suất thắng $98.2\%$ giống hệt nhau! Tính chất này chính là chìa khóa dẫn đến thuật toán DPO ở Chương 3.
+\end{mathdecode}
+
+\subsection{Kiến trúc của Reward Model \& Bước tiến sang GenRM (2025)}
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Kiến trúc truyền thống (Scalar RM):} Lấy mô hình $\pi_{\text{SFT}}$, tháo bỏ lớp dự đoán từ vựng ở đỉnh (kích thước $d \times |V|$) và gắn vào một lớp tuyến tính nhỏ kích thước $d \times 1$ (\textit{Value Head}) để ép vector ẩn $\mathbf{h}_T$ của \textbf{token cuối cùng trong câu ($\langle\text{EOS}\rangle$)} thành 1 con số thực duy nhất $r_\phi(x, y) \in \mathbb{R}$.
+\end{itemize}
+
+\begin{debate}[Câu hỏi Kỹ sư số 5: ``Tại sao Reward Model chỉ lấy vector ở đúng 1 token cuối cùng $\langle\text{EOS}\rangle$ để chấm điểm mà không lấy trung bình cộng tất cả các token trong câu?'']
+Hãy nhớ lại cơ chế \textbf{Causal Self-Attention} trong Transformer Decoder:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Token thứ 1 ở đầu câu trả lời chỉ nhìn thấy câu hỏi $x$ và chính nó (chưa hề biết phần sau của câu trả lời viết đúng hay sai!). Nếu bạn lấy trung bình cộng cả các token đầu câu, điểm số sẽ bị pha loãng bởi những vị trí ``chưa đọc hết câu trả lời''.
+    \item Duy nhất \textbf{token kết thúc câu ($\langle\text{EOS}\rangle$ ở vị trí $T$)} nằm ở tận cùng bên phải, nên nó có quyền nhìn thấy (attend vào) toàn bộ câu hỏi $x$ và toàn bộ các chữ $y_1, \dots, y_T$ của câu trả lời! Do đó, mạng nơ-ron học cách dồn toàn bộ kết luận đánh giá của cả bài văn vào đúng vector ẩn $\mathbf{h}_T$ tại vị trí $\langle\text{EOS}\rangle$.
+\end{itemize}
+\end{debate}
+
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Xu hướng Mới nhất (2025--2026) -- Generative Verifiers / GenRM \citep{zhang2025generative} \& RLAIF \citep{bai2022constitutional, lee2023rlaif}:}
+    Điểm yếu của Scalar RM truyền thống là nó phải ép ra ngay 1 con số ở token cuối cùng mà không được ``suy nghĩ nháp'', nên khi chấm các bài toán khó hoặc code phức tạp, Scalar RM rất hay chấm bừa!
+    Trong công trình \textbf{GenRM (\textit{Generative Verifiers})} tại ICLR 2025, \citet{zhang2025generative} giữ nguyên kiến trúc sinh chữ của LLM làm giám khảo: trước khi đưa ra kết luận câu nào tốt hơn, Giám khảo AI được phép sinh ra một chuỗi phân tích, đối chiếu lỗi từng dòng (\textit{Critique-out-Loud}), rồi mới lấy xác suất của token kết luận (\texttt{Yes}/\texttt{No} hoặc \texttt{A}/\texttt{B}) làm điểm thưởng! Cách làm này giúp độ chính xác của giám khảo tăng vọt trên các tác vụ suy luận.
+\end{itemize}
+
+% ============================================================================
+\section{Định luật Goodhart, Ràng buộc KL \& Giải phẫu PPO / GAE}
+\label{sec:goodhart_ppo_eng}
+
+Khi đã có giám khảo $r_\phi(x, y)$, ta bắt đầu huấn luyện mô hình ngôn ngữ (lúc này gọi là \textbf{Actor / Policy} $\pi_\theta$) để sinh câu trả lời đạt điểm $r_\phi$ cao nhất.
+
+\subsection{Tại sao không có Ràng buộc KL thì Mô hình sẽ ``Phát điên''? (Reward Hacking \citealt{gao2023scaling})}
+Nếu bạn chỉ yêu cầu mô hình tối đa hóa điểm của giám khảo $\max_{\pi_\theta} \E[r_\phi(x, y)]$, bạn sẽ ngay lập tức đụng phải \textbf{Định luật Goodhart}: vì giám khảo $r_\phi$ chỉ là một mạng nơ-ron không hoàn hảo, mô hình $\pi_\theta$ sẽ tìm ra các ``kẽ hở'' để lừa giám khảo cho điểm tối đa mà không cần trả lời đúng (\textbf{Reward Hacking})!
+
+\begin{caseexample}[Các kiểu Reward Hacking kinh điển ngoài đời thực \citep{gao2023scaling}]
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Bệnh nịnh hót và viết sáo rỗng:} Giám khảo $r_\phi$ thấy các câu trả lời lịch sự, dài dòng thường được người chấm thích. Thế là khi người dùng hỏi \textit{``2 + 2 bằng mấy?''}, mô hình viết một bài diễn văn dài 500 chữ ca ngợi câu hỏi vô cùng sâu sắc và tuyệt vời nhưng không thèm trả lời bằng 4!
+    \item \textbf{Bệnh xuất ký tự ma:} Sau khoảng $1,000$ bước tối ưu hóa cực đoan, mô hình phát hiện ra nếu cứ viết chuỗi chữ vô nghĩa \texttt{``the the the best awesome helpful...''} thì một nơ-ron bị lỗi trong $r_\phi$ sẽ kích hoạt điểm thưởng $+99.9$!
+\end{enumerate}
+\end{caseexample}
+
+Để trị căn bệnh này, hàm mục tiêu của RLHF \citep{ziegler2019fine, stiennon2020learning, ouyang2022training} bắt buộc phải gắn thêm một \textbf{``sợi dây xích an toàn''} gọi là \textbf{Phạt Phân kỳ KL (KL-Divergence Penalty)} so với bản sao đóng băng của mô hình SFT ban đầu ($\pi_{\text{ref}}$):
+\begin{equation}
+    \max_{\pi_\theta} \E_{x \sim \mathcal{D},\, y \sim \pi_\theta(\cdot \mid x)} \left[ r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \right].
+    \label{eq:kl_rl_obj}
+\end{equation}
+
+\begin{mathdecode}[Sợi dây chun KL hoạt động như thế nào qua con số?]
+Tại mỗi bước chọn chữ $y_t$, đại lượng phạt KL là $-\beta \log \frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\text{ref}}(y_t \mid x, y_{<t})}$ (với hệ số độ cứng dây chun thường chọn $\beta = 0.05$ hoặc $0.1$):
+\begin{itemize}[leftmargin=1.2cm]
+    \item Nếu mô hình mới $\pi_\theta$ chọn chữ giống với thói quen ngôn ngữ tự nhiên của mô hình SFT gốc $\pi_{\text{ref}}$ (ví dụ $\pi_\theta(y_t) = 0.20$ và $\pi_{\text{ref}}(y_t) = 0.20$): Tỷ số $\frac{0.20}{0.20} = 1 \implies \log(1) = \mathbf{0}$ (Không bị phạt!).
+    \item Nếu mô hình mới $\pi_\theta$ định ``giở trò'' sinh ra một từ kỳ quặc để hack điểm mà mô hình SFT gốc gần như không bao giờ dùng (ví dụ $\pi_\theta(y_t) = 0.90$ trong khi $\pi_{\text{ref}}(y_t) = 0.0001$):
+    Tỷ số $\frac{0.90}{0.0001} = 9,000 \implies \log(9,000) \approx 9.1$. Với $\beta = 0.1$, ngay tại chữ đó mô hình lập tức bị trừ điểm phạt $-\beta \log(\cdot) = \mathbf{-0.91}$! Nếu nó viết 10 chữ kỳ quặc liên tiếp, nó bị trừ tới $\mathbf{-9.1}$ điểm, xóa sạch mọi điểm thưởng kiếm được từ việc hack $r_\phi$!
+\end{itemize}
+\end{mathdecode}
+
+\subsection{Giải thích Trực quan Mạng Phê bình (Critic $V_\psi$), GAE \& Phanh ABS của PPO}
+Trong thuật toán \textbf{PPO (\textit{Proximal Policy Optimization})} \citep{schulman2017proximal}, có hai câu hỏi kỹ thuật lớn cần giải quyết:
+
+\begin{debate}[Câu hỏi Kỹ sư số 6: ``Điểm thưởng $r_\phi(x, y)$ chỉ có ở chữ cuối cùng của bài văn dài 500 chữ. Làm sao biết chữ thứ 15 hay chữ thứ 480 mới là chữ có công (hoặc có tội) để thưởng/phạt cho công bằng?'']
+Nếu một bài văn 500 chữ có 480 chữ đầu phân tích cực hay, nhưng 20 chữ cuối kết luận nhầm làm cả bài bị điểm âm ($-4.0$), mà ta phạt đồng đều cả 500 chữ thì 480 chữ đầu sẽ bị \textbf{phạt oan}!
+Để quy kết công trạng chính xác cho từng chữ (\textit{Credit Assignment}), PPO nuôi thêm một mạng nơ-ron thứ tư gọi là \textbf{Mạng Phê bình (Critic / Value Model $V_\psi$)}:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Khi mô hình đang viết đến chữ thứ $t$, Critic $V_\psi(x, y_{<t})$ nhìn vào đoạn đang viết dở và \textbf{dự đoán trước xem khi viết xong cả bài thì dự kiến sẽ được mấy điểm}.
+    \item \textbf{Ví dụ bằng con số (Cơ chế TD-Error $\delta_t$ và GAE \citealt{schulman2016high}):}
+    \begin{itemize}
+        \item Ở chữ thứ 479 (đoạn đầu đang viết rất tốt), Critic dự đoán: \textit{``Bài này viết xong chắc chắn được $\mathbf{+8.0}$ điểm!''} ($V(s_{479}) = +8.0$).
+        \item Nhưng đến chữ thứ 480, mô hình Actor bỗng gõ chữ \textit{``Tuy nhiên, 2+2=5''}. Ngay lập tức, Critic nhìn vào chữ thứ 480 và hoảng hốt hạ dự đoán xuống: \textit{``Thôi chết, viết chữ này vào là cuối bài chỉ còn $\mathbf{-4.0}$ điểm thôi!''} ($V(s_{480}) = -4.0$).
+        \item Độ tụt giảm dự đoán ngay tại chữ 480 là: $\delta_{480} = V(s_{480}) - V(s_{479}) = (-4.0) - (+8.0) = \mathbf{-12.0}$!
+    \end{itemize}
+    Nhờ sự chênh lệch dự đoán của Critic giữa trước và sau khi gõ mỗi chữ ($\delta_t = \tilde{r}_t + \gamma V_\psi(s_{t+1}) - V_\psi(s_t)$), phương pháp \textbf{GAE} chỉ thẳng mặt chữ thứ 480 chính là thủ phạm làm mất $12$ điểm để phạt thật nặng, trong khi 479 chữ đầu tiên vẫn được bảo vệ!
+\end{itemize}
+\end{debate}
+
+Cuối cùng, để tránh việc cập nhật đạo hàm quá mạnh làm mô hình thay đổi đột ngột trong 1 bước, PPO đặt ra cơ chế \textbf{Cắt ngưỡng Tỷ số Xác suất (PPO-Clip)} \citep{schulman2017proximal} với ngưỡng $\epsilon = 0.2$:
+\begin{equation}
+    \mathcal{J}_{\text{PPO}}(\theta) = \E_t \left[ \min\Big( \rho_t(\theta) \hat{A}_t,\; \clip\big(\rho_t(\theta),\, 1 - \epsilon,\, 1 + \epsilon\big) \hat{A}_t \Big) \right], \quad \text{với } \rho_t(\theta) = \frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\theta_{\text{old}}}(y_t \mid x, y_{<t})}.
+    \label{eq:ppo_clip_eng}
+\end{equation}
+\textbf{Ý nghĩa kỹ thuật:} $\rho_t(\theta)$ là tỷ số giữa xác suất mới và xác suất cũ của cùng một chữ. Hàm $\clip(\rho_t, 0.8, 1.2)$ hoạt động như một \textbf{hệ thống phanh ABS}: nếu một chữ được khen ($\hat{A}_t > 0$), mô hình chỉ được phép tăng xác suất của chữ đó lên tối đa $1.2$ lần ($+20\%$) trong một vòng lặp; vượt quá $1.2$ thì đạo hàm tự động ngắt về $0$. Tương tự, nếu một chữ bị chê ($\hat{A}_t < 0$), xác suất của nó chỉ bị giảm xuống tối đa còn $0.8$ lần ($-20\%$), đảm bảo mạng nơ-ron không bao giờ bị sốc!
+
+% ============================================================================
+\section{Tại sao Kỹ sư AI lại ``Sợ'' PPO? Bài toán 4 Mô hình \& Sự trỗi dậy của RLOO}
+\label{sec:why_engineers_fear_ppo}
+
+Mặc dù lý thuyết của PPO rất hay, trong thực tế triển khai sản phẩm, rất ít đội ngũ kỹ sư vừa và nhỏ chạy thành công PPO cho LLM vì \textbf{2 cơn ác mộng hệ thống} \citep{sheng2024hybridflow, ahmadian2024back}:
+
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Ác mộng Bộ nhớ VRAM -- Phải nuôi cùng lúc 4 Mô hình Khổng lồ:}
+    Để chạy 1 vòng lặp PPO, bạn phải nạp đồng thời lên cụm GPU 4 mô hình:
+    \begin{itemize}
+        \item (1) \textbf{Actor $\pi_\theta$} (Đang học -- tốn Weights + Gradients + AdamW Optimizer States).
+        \item (2) \textbf{Critic $V_\psi$} (Đang học -- kích thước to ngang Actor, lại tốn thêm một bộ Weights + Gradients + AdamW States nữa!).
+        \item (3) \textbf{Reference Model $\pi_{\text{ref}}$} (Đóng băng -- dùng để tính phạt KL).
+        \item (4) \textbf{Reward Model $r_\phi$} (Đóng băng -- dùng để chấm điểm cuối câu).
+    \end{itemize}
+    \item \textbf{Xung đột Phần cứng giữa Pha Sinh chữ (Rollout) và Pha Học (Training):}
+    Trong mỗi bước PPO, mô hình Actor phải tự gõ từng chữ một từ đầu đến cuối câu (\textit{Autoregressive Rollout}). Gõ từng chữ một trên GPU cực kỳ chậm vì bị nghẽn băng thông đọc bộ nhớ (\textit{Memory-Bandwidth Bound}), chiếm tới \textbf{80\% tổng thời gian chạy}, trong khi nhân tính toán của GPU ngồi chơi xơi nước! Đến khi gom đủ câu trả lời để chạy Backpropagation (chỉ mất 20\% thời gian) thì lại bị tràn bộ nhớ VRAM vì phải chứa 4 mô hình!
+\end{enumerate}
+
+\subsection{Giải pháp Cứu cánh cho Kỹ sư: Thuật toán RLOO (REINFORCE Leave-One-Out \citealt{ahmadian2024back})}
+Tại hội nghị ACL 2024, nhóm nghiên cứu Cohere \citep{ahmadian2024back} đặt ra một câu hỏi chấn động trong bài báo \textit{``Back to Basics''}: \textbf{``Trong LLM, chúng ta đã khởi tạo mô hình từ $\pi_{\text{SFT}}$ vốn đã rất tốt rồi, liệu có thực sự cần đến mạng Critic $V_\psi$ và GAE phức tạp của PPO hay không?''}
+
+Họ chứng minh rằng: Trong LLM, phần lớn sự thành công đến từ điểm thưởng toàn câu chứ không cần Critic chia nhỏ từng chữ! Thay vì nuôi mạng Critic $V_\psi$ tốn hàng trăm GB VRAM, thuật toán \textbf{RLOO (\textit{REINFORCE Leave-One-Out})} làm một việc cực kỳ đơn giản:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Với mỗi câu hỏi $x$, cho mô hình sinh ra $K$ câu trả lời độc lập (ví dụ $K = 4$): $\{y^{(1)}, y^{(2)}, y^{(3)}, y^{(4)}\}$ với tổng điểm (đã trừ KL) là $\{R_1, R_2, R_3, R_4\}$.
+    \item Để tính điểm lợi thế $A_i$ cho câu trả lời thứ $i$, ta lấy điểm của nó \textbf{trừ đi trung bình cộng của $K-1$ câu trả lời còn lại trong nhóm}:
+    \begin{equation}
+        A_i^{\text{RLOO}} = R_i - \frac{1}{K - 1} \sum_{j \neq i} R_j.
+        \label{eq:rloo_eng}
+    \end{equation}
+\end{itemize}
+Nhờ không dùng chính $R_i$ trong số trung bình của nó (\textit{Leave-One-Out}), đường cơ sở này hoàn toàn không chệch (\textit{Unbiased}), giúp \textbf{xóa sổ hoàn toàn mạng Critic $V_\psi$}, tiết kiệm một nửa VRAM mà chất lượng mô hình sau huấn luyện thậm chí còn cao hơn và ổn định hơn PPO! Đây cũng chính là người anh em song sinh đặt nền móng cho thuật toán \textbf{GRPO} của DeepSeek mà chúng ta sẽ mổ xẻ ở Chương 4.

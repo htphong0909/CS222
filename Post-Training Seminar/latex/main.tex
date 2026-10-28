@@ -1,0 +1,200 @@
+\documentclass[11pt,a4paper,oneside]{report}
+
+% ============================================================================
+% GÓI NGÔN NGỮ TIẾNG VIỆT & BẢNG MÃ FONT
+% ============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\shorthandoff{"}
+
+% ============================================================================
+% CẤU HÌNH TRANG & BỐ CỤC
+% ============================================================================
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+
+% ============================================================================
+% CÁC GÓI TOÁN HỌC CHUYÊN SÂU
+% ============================================================================
+\usepackage{amsmath, amssymb, amsfonts, amsthm, mathtools, bm}
+\allowdisplaybreaks
+
+% Định nghĩa các toán tử toán học chuẩn
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\Var}{\mathrm{Var}}
+\DeclareMathOperator{\Cov}{\mathrm{Cov}}
+\DeclareMathOperator{\DKL}{\mathbb{D}_{\mathrm{KL}}}
+\DeclareMathOperator{\DJS}{\mathbb{D}_{\mathrm{JS}}}
+\DeclareMathOperator{\clip}{\mathrm{clip}}
+\DeclareMathOperator{\mean}{\mathrm{mean}}
+\DeclareMathOperator{\std}{\mathrm{std}}
+\DeclareMathOperator{\diag}{\mathrm{diag}}
+\DeclareMathOperator{\Softmax}{\mathrm{Softmax}}
+
+% ============================================================================
+% BẢNG BIỂU, ĐỒ HỌA & MÀU SẮC
+% ============================================================================
+\usepackage{booktabs, longtable, tabularx, array, multirow}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc, fit, backgrounds}
+
+\definecolor{stanfordred}{RGB}{140, 21, 21}
+\definecolor{darkblue}{RGB}{0, 51, 102}
+\definecolor{darkgreen}{RGB}{0, 100, 50}
+\definecolor{boxbg}{RGB}{247, 249, 252}
+\definecolor{warnbg}{RGB}{254, 246, 246}
+
+% ============================================================================
+% ĐỊNH NGHĨA MÔI TRƯỜNG ĐỊNH LÝ, ĐỊNH NGHĨA, CHỨNG MINH & LƯU Ý SƯ PHẠM
+% ============================================================================
+\theoremstyle{plain}
+\newtheorem{theorem}{Định lý}[chapter]
+\newtheorem{lemma}[theorem]{Bổ đề}
+\newtheorem{proposition}[theorem]{Mệnh đề}
+\newtheorem{corollary}[theorem]{Hệ quả}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Định nghĩa}[chapter]
+\newtheorem{example}{Ví dụ Minh họa}[chapter]
+
+\theoremstyle{remark}
+\newtheorem{remark}{Ghi chú Toán học \& Hệ thống}[chapter]
+\newtheorem{pedagogy}{Cầu nối Sư phạm (Từ Pre-training đến Post-training)}[chapter]
+
+% ============================================================================
+% TRÍCH DẪN HỌC THUẬT & SIÊU LIÊN KẾT
+% ============================================================================
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks=true, linkcolor=darkblue, citecolor=stanfordred, urlcolor=darkblue]{hyperref}
+
+% ============================================================================
+% THÔNG TIN TÀI LIỆU
+% ============================================================================
+\title{
+    \vspace{-1.5cm}
+    {\Large \textbf{GIÁO TRÌNH \& BÀI GIẢNG CHUYÊN SÂU}}\\[0.4cm]
+    {\LARGE \textbf{\textcolor{stanfordred}{POST-TRAINING CHO MÔ HÌNH NGÔN NGỮ LỚN (LLMs):}}}\\[0.2cm]
+    {\Large \textbf{Cơ sở Toán học, Tối ưu hóa Sở thích, Học Tăng cường Suy luận,\\Chắt lọc Tri thức và Kiến trúc Hệ thống}}\\[0.8cm]
+    {\normalsize \textit{Hệ quy chiếu học thuật: Kết hợp Stanford CS224N (Lý thuyết Alignment, Toán học Tối ưu hóa \& Reasoning)\\và Stanford CS336 (Kiến trúc Hệ thống \& Giải phẫu Bộ nhớ từ Nguyên lý Gốc)}}
+}
+\author{
+    \textbf{Tài liệu Giảng dạy Học thuật Chuyên sâu (Thời lượng: 180 Phút)}\\
+    \textit{Thiết kế dành cho người học đã nắm vững Pre-training cơ bản, bắt đầu từ con số 0 với Post-Training \& RL}
+}
+\date{Phiên bản Chuẩn hóa Toán học \& Trích dẫn Học thuật -- Năm 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent
+Bộ giáo trình này cung cấp một hệ thống lý thuyết và dẫn xuất toán học toàn diện về \textbf{Post-Training cho Mô hình Ngôn ngữ Lớn (Large Language Models -- LLMs)}. Tài liệu được thiết kế đặc biệt cho đối tượng người học mới chỉ được trang bị kiến thức cơ bản về giai đoạn Tiền huấn luyện (\textit{Pre-training}: kiến trúc Transformer Decoder-only, cơ chế Tự chú ý Nhân quả \textit{Causal Self-Attention}, bộ nhớ đệm \textit{KV-Cache}, và hàm mất mát \textit{Cross-Entropy} dự đoán từ tiếp theo), nhưng \textbf{chưa từng có kiến thức nền tảng về Post-Training hay Học tăng cường (Reinforcement Learning -- RL)}. Toàn bộ nội dung loại bỏ sự phụ thuộc vào mã nguồn lập trình, tập trung giải phẫu bản chất vật lý và chứng minh từng bước mọi công thức toán học từ nguyên lý gốc (\textit{First Principles}), đồng thời đối chiếu nghiêm ngặt với hơn 55 công trình nghiên cứu nền tảng từ Stanford, OpenAI, Anthropic, Meta, Google DeepMind, AI2 và DeepSeek.
+
+\vspace{0.3cm}
+\noindent
+Nội dung tài liệu bao gồm 6 chương chuyên sâu:
+\begin{enumerate}[leftmargin=1.5cm]
+    \item \textbf{Chương 1 -- Tinh chỉnh có Giám sát (Supervised Fine-Tuning -- SFT):} Phân tích khoảng cách mục tiêu (\textit{Objective Mismatch}) qua phân kỳ KL xuôi, cấu trúc hội thoại và toán học khởi tạo ma trận nhúng cho Special Tokens, mặt nạ mất mát (\textit{Prompt Masking}), đóng gói chuỗi (\textit{Sequence Packing}) với mặt nạ chú ý đường chéo khối (\textit{Block-Diagonal Causal Attention}), đặt lại vị trí quay RoPE, và quy luật dữ liệu từ LIMA đến Llama 3 / Tülu 3.
+    \item \textbf{Chương 2 -- Nhập môn RL cho LLM, RLHF \& Giải thuật PPO:} Giải thích ba giới hạn toán học của SFT (Ảo giác do bắt chước hành vi, Độ lệch phơi nhiễm bậc hai $\mathcal{O}(T^2)$ và Sự bất đối xứng Sinh--Kiểm chứng); xây dựng cầu nối nhập môn Học tăng cường từ hàm Cross-Entropy sang Đạo hàm Chính sách (\textit{Policy Gradient}), chứng minh Bổ đề Đường cơ sở Không chệch (\textit{Unbiased Baseline}); dẫn xuất mô hình Bradley--Terry và Plackett--Luce cho Reward Model, RLAIF / Constitutional AI; phân tích Định luật Goodhart và quy luật quá tối ưu hóa của Gao et al. (2023); chứng minh công thức GAE (\textit{Generalized Advantage Estimation}), hàm mục tiêu cắt ngưỡng PPO-Clip, và giải phẫu bài toán hệ thống 4 mô hình trên VRAM.
+    \item \textbf{Chương 3 -- Giải phẫu Toán học Direct Preference Optimization (DPO) \& Các Biến thể:} Chứng minh đầy đủ nghiệm đóng Gibbs/Boltzmann của bài toán RL có ràng buộc KL, định lý về lớp tương đương của hàm phần thưởng, phép đổi biến triệt tiêu hàm phân hoạch $Z(x)$, phân tích động lực học của đạo hàm DPO; chứng minh toán học cho 4 cạm bẫy của DPO gốc và các biến thể khắc phục gồm \textbf{SimPO}, \textbf{ORPO}, \textbf{IPO}, \textbf{KTO}, và \textbf{Iterative RPO / DPO+NLL} chống hiện tượng dịch chuyển xác suất (\textit{Likelihood Displacement}).
+    \item \textbf{Chương 4 -- Kỷ nguyên Reasoning RL (RLVR, GRPO, DeepSeek-R1 \& Test-Time Compute):} Phân tích sự dịch chuyển từ RLHF sang RLVR (\textit{Reinforcement Learning with Verifiable Rewards}), cuộc tranh luận ORM vs. PRM, cơ chế tự phát sinh chuỗi suy luận dài (\textit{Emergent Long CoT}) trong DeepSeek-R1-Zero và quy trình 4 giai đoạn của DeepSeek-R1; dẫn xuất toán học của \textbf{GRPO} cho cả giám sát kết quả và giám sát quá trình; chứng minh đầy đủ 3 bộ ước lượng KL của Schulman ($k_1, k_2, k_3$); phân tích thiên kiến độ dài và độ khó câu hỏi trong \textbf{Dr. GRPO} và \textbf{DAPO}; cùng toán học của mở rộng tính toán lúc suy luận (\textit{Test-Time Compute Scaling}) và ước lượng không chệch $\text{Pass@}k$.
+    \item \textbf{Chương 5 -- Chắt lọc Tri thức Mô hình (Model Distillation):} Phân tích toán học của mô hình Thầy--Trò trong Post-training qua 3 hình thái: Chắt lọc phân phối dự đoán (\textit{Logit Distillation} và sự đối đầu giữa \textit{Forward KL Mean-Seeking} vs. \textit{Reverse KL Mode-Seeking} trong MiniLLM và On-Policy GKD), Chắt lọc cấp độ chuỗi (\textit{Sequence-Level Distillation}), và Chắt lọc quá trình suy luận (\textit{Rationale / Step-by-Step Distillation}).
+    \item \textbf{Chương 6 -- Kiến trúc Bộ nhớ Hệ thống, Đánh giá Mô hình \& Chẩn đoán Lỗi:} Giải phẫu từng byte bộ nhớ phần cứng (Model States, AdamW FP32 Master Weights, KV-Cache, Activations), phân tích Cường độ Số học (\textit{Arithmetic Intensity}), toán học của ZeRO/FSDP, Gradient Checkpointing và LoRA/QLoRA; phân tích lý thuyết thông tin của Thuế căn chỉnh (\textit{Alignment Tax}), mô hình thống kê Elo/Bradley--Terry trên Chatbot Arena, hồi quy khử thiên kiến độ dài trong \textbf{LC-AlpacaEval}, và cẩm nang chẩn đoán các bất thường toán học khi huấn luyện.
+\end{enumerate}
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+% LỊCH TRÌNH GIẢNG DẠY & SƠ ĐỒ CẤU TRÚC TỔNG QUAN (SYLLABUS 180 PHÚT)
+% ============================================================================
+\chapter*{Khung Chương Trình \& Lịch Trình Giảng Dạy (180 Phút)}
+\addcontentsline{toc}{chapter}{Khung Chương Trình \& Lịch Trình Giảng Dạy (180 Phút)}
+
+\section*{1. Phân bổ Thời lượng Giảng dạy trên Lớp}
+
+\begin{table}[h!]
+\centering
+\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{2.3cm} >{\bfseries}p{3.2cm} X p{3.8cm}}
+\toprule
+Thời lượng & Học phần & Trọng tâm Toán học, Lý thuyết \& Hệ thống & Các Công trình Nghiên cứu Cốt lõi \\
+\midrule
+00:00 -- 00:30 \newline \textit{(30 phút)} & Chương 1: \newline Từ Pre-training đến SFT & Phân kỳ KL xuôi \& Objective Mismatch, Toán học khởi tạo Embedding cho Special Tokens, Mặt nạ mất mát (Prompt Masking), Đóng gói chuỗi (Sequence Packing), Mặt nạ đường chéo khối \& RoPE Reset, LIMA vs. Scaling SFT & \citet{brown2020language, ouyang2022training, hewitt2021initializing, su2024roformer, zhou2023lima, dubey2024llama, lambert2024tulu} \\
+\midrule
+00:30 -- 01:10 \newline \textit{(40 phút)} & Chương 2: \newline Nhập môn RL, RLHF \& PPO & Ba giới hạn của SFT (Hallucination, Exposure Bias $\mathcal{O}(T^2)$), Cầu nối từ Cross-Entropy sang Policy Gradient \& Baseline không chệch, Bradley--Terry, Plackett--Luce, RLAIF, Định luật Goodhart, GAE, PPO-Clip \& Bài toán 4 mô hình & \citet{williams1992simple, bradley1952rank, schulman2016high, schulman2017proximal, christiano2017deep, stiennon2020learning, bai2022constitutional, gao2023scaling, kang2024unfamiliar} \\
+\midrule
+01:10 -- 01:45 \newline \textit{(35 phút)} & Chương 3: \newline Giải phẫu Toán học DPO \& Biến thể & Nghiệm đóng Gibbs/Boltzmann, Lớp tương đương phần thưởng, Triệt tiêu hàm phân hoạch $Z(x)$, Động lực học đạo hàm DPO, Bốn cạm bẫy lý thuyết (Length Bias, Likelihood Displacement) \& SimPO, ORPO, IPO, KTO, RPO & \citet{rafailov2023direct, azar2024general, ethayarajh2024kto, park2024disentangling, meng2024simpo, hong2024orpo, razin2024unintentional, pang2024iterative} \\
+\midrule
+01:45 -- 02:20 \newline \textit{(35 phút)} & Chương 4: \newline Reasoning RL, RLVR \& GRPO & RLVR vs. RLHF, ORM vs. PRM, Sự trỗi dậy tự nhiên của CoT trong DeepSeek-R1-Zero \& Quy trình 4 bước của R1, Toán học GRPO (Outcome \& Process), Chứng minh 3 bộ ước lượng KL của Schulman, Dr. GRPO, DAPO \& Test-Time Compute & \citet{lightman2023lets, shao2024deepseekmath, schulman2020approximating, deepseek2025r1, liu2025understanding, yu2025dapo, snell2024scaling, chen2021evaluating} \\
+\midrule
+02:20 -- 02:40 \newline \textit{(20 phút)} & Chương 5: \newline Chắt lọc Tri thức (Model Distillation) & Mô hình Thầy--Trò, Chắt lọc phân phối Logits với nhiệt độ $\tau$, Chứng minh Forward KL (Mean-Seeking) vs. Reverse KL (Mode-Seeking) trong MiniLLM \& On-Policy GKD, Chắt lọc chuỗi (SeqKD) \& Chắt lọc suy luận (Rationale KD) & \citet{hinton2015distilling, kim2016sequence, hsieh2023distilling, gu2024minillm, agarwal2024onpolicy, deepseek2025r1} \\
+\midrule
+02:40 -- 03:00 \newline \textit{(20 phút)} & Chương 6: \newline Hệ thống, Đánh giá \& Chẩn đoán & Giải phẫu từng byte VRAM (Model States, KV-Cache, Activations), Cường độ số học, Toán học của ZeRO/FSDP, Checkpointing \& LoRA, Alignment Tax, Hồi quy khử thiên kiến LC-AlpacaEval \& Bảng chẩn đoán lỗi toán học & \citet{rajbhandari2020zero, hu2022lora, dettmers2023qlora, sheng2024hybridflow, zheng2023judging, dubois2024length, chiang2024chatbot} \\
+\bottomrule
+\end{tabularx}
+\caption{Lịch trình phân bổ 180 phút giảng dạy lý thuyết và toán học Post-Training.}
+\end{table}
+
+\section*{2. Bảng Ký hiệu Toán học Thống nhất trong Toàn bộ Giáo trình}
+
+\begin{longtable}{p{3.2cm} p{11.8cm}}
+\toprule
+\textbf{Ký hiệu} & \textbf{Ý nghĩa Toán học Chuẩn hóa} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Ký hiệu} & \textbf{Ý nghĩa Toán học Chuẩn hóa} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$V, |V|$ & Bảng từ vựng (\textit{Vocabulary}) của mô hình và kích thước bảng từ vựng (số lượng token). \\
+$d$ & Số chiều không gian ẩn (\textit{Hidden dimension}) của kiến trúc Transformer. \\
+$\mathbf{E}_{\text{in}}, \mathbf{E}_{\text{out}} \in \mathbb{R}^{|V| \times d}$ & Ma trận nhúng từ vựng đầu vào (\textit{Input Embedding}) và ma trận chiếu từ vựng đầu ra (\textit{LM Head}). \\
+$x = (x_1, \dots, x_M)$ & Chuỗi token đầu vào (\textit{Prompt / Context / Question}), đôi khi ký hiệu là $q$ trong bài toán suy luận. \\
+$y = (y_1, \dots, y_T)$ & Chuỗi token phản hồi (\textit{Response / Completion / Output}), đôi khi ký hiệu là $o$ trong GRPO, với độ dài $|y| = T$. \\
+$y_{<t} = (y_1, \dots, y_{t-1})$ & Tiền tố các token đã được sinh ra trước bước thời gian $t$ (với quy ước $y_{<1} = \emptyset$). \\
+$\pi_\theta(y_t \mid x, y_{<t})$ & Phân phối xác suất dự đoán token thứ $t$ của mô hình chính sách (\textit{Policy / Actor}) có tham số $\theta$. \\
+$\pi_{\text{SFT}}, \pi_{\text{ref}}$ & Mô hình sau tinh chỉnh có giám sát và mô hình tham chiếu đóng băng (\textit{Frozen Reference Policy}). \\
+$m_t \in \{0, 1\}$ & Mặt nạ mất mát nhị phân (\textit{Loss Mask}) tại vị trí $t$: $m_t = 1$ nếu thuộc phần trả lời của Assistant, $m_t = 0$ nếu thuộc Prompt. \\
+$y_w \succ y_l \mid x$ & Phản hồi được chọn (\textit{winner / chosen} $y_w$) được đánh giá cao hơn phản hồi bị loại (\textit{loser / rejected} $y_l$) cho câu hỏi $x$. \\
+$r_\phi(x, y) \in \mathbb{R}$ & Điểm thưởng vô hướng xuất ra từ Mô hình Phần thưởng (\textit{Reward Model}) có bộ tham số $\phi$. \\
+$V_\psi(x, y_{<t}) \in \mathbb{R}$ & Giá trị kỳ vọng tương lai ước lượng tại trạng thái $(x, y_{<t})$ bởi Mạng Phê bình (\textit{Critic / Value Model}) có tham số $\psi$. \\
+$A_t \in \mathbb{R}$ & Giá trị Hàm Lợi thế (\textit{Advantage Function}) tại bước thời gian $t$. \\
+$\delta_t^V \in \mathbb{R}$ & Sai số dự đoán theo thời gian (\textit{Temporal-Difference Residual}): $\delta_t^V = \tilde{r}_t + \gamma V_\psi(s_{t+1}) - V_\psi(s_t)$. \\
+$\DKL(P \parallel Q)$ & Phân kỳ Kullback--Leibler từ phân phối $Q$ sang phân phối $P$: $\DKL(P \parallel Q) = \E_{z \sim P}\big[\log(P(z)/Q(z))\big] \ge 0$. \\
+$\beta > 0$ & Hệ số điều phạt độ lệch phân kỳ KL (\textit{KL-Penalty Coefficient}) giữ $\pi_\theta$ không đi quá xa $\pi_{\text{ref}}$. \\
+$Z(x)$ & Hàm phân hoạch (\textit{Partition Function}): $Z(x) = \sum_{y} \pi_{\text{ref}}(y \mid x)\exp\big(\frac{1}{\beta}r(x, y)\big)$. \\
+$\sigma(z)$ & Hàm Logistic Sigmoid chuẩn: $\sigma(z) = \frac{1}{1 + e^{-z}}$, thỏa mãn $1 - \sigma(z) = \sigma(-z)$ và $\frac{d}{dz}\log\sigma(z) = \sigma(-z)$. \\
+$\rho_t(\theta)$ & Tỷ số lấy mẫu quan trọng (\textit{Importance Sampling Ratio}): $\rho_t(\theta) = \frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\theta_{\text{old}}}(y_t \mid x, y_{<t})}$. \\
+\end{longtable}
+
+% ============================================================================
+% NẠP NỘI DUNG 6 CHƯƠNG CHUYÊN SÂU
+% ============================================================================
+\input{chapters/ch01_sft}
+\input{chapters/ch02_rlhf_ppo}
+\input{chapters/ch03_dpo}
+\input{chapters/ch04_reasoning_rl_grpo}
+\input{chapters/ch05_distillation}
+\input{chapters/ch06_systems_evaluation}
+
+% ============================================================================
+% TÀI LIỆU THAM KHẢO
+% ============================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

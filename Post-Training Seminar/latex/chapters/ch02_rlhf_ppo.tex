@@ -1,0 +1,418 @@
+﻿\chapter{Nhập môn Học Tăng Cường cho LLM, RLHF \& Giải thuật PPO}
+\label{chap:rlhf_ppo}
+
+\begin{pedagogy}
+Chương này đóng vai trò cầu nối bản lề trong toàn bộ khóa học: đưa người học từ tư duy Học có Giám sát (\textit{Supervised Learning}) sang tư duy \textbf{Học Tăng Cường (Reinforcement Learning -- RL)}. Chúng ta sẽ giải thích triệt để ba giới hạn toán học khiến SFT không thể tự giải quyết bài toán căn chỉnh, xây dựng khái niệm RL từ con số 0 dựa trên bài toán dự đoán token tiếp theo, dẫn xuất mô hình đánh giá sở thích Bradley--Terry / Plackett--Luce, phân tích toán học của Định luật Goodhart, chứng minh giải thuật PPO với hàm lợi thế GAE, và giải phẫu bài toán hệ thống 4 mô hình trên phần cứng.
+\end{pedagogy}
+
+% ============================================================================
+\section{Ba Giới hạn Toán học và Nhận thức Cốt lõi của SFT}
+\label{sec:sft_limitations}
+
+Trước khi tìm hiểu RL, một câu hỏi tự nhiên mà người học xuất phát từ Pre-training luôn đặt ra là: \textit{``Nếu ta đã có tập dữ liệu SFT gồm hàng trăm nghìn mẫu lời giải hoàn hảo của chuyên gia, tại sao mô hình vẫn mắc lỗi ngớ ngẩn và tại sao bắt buộc phải cần đến Học tăng cường?''}
+
+Có ba rào cản nền tảng mà phương pháp Tinh chỉnh có Giám sát không bao giờ có thể tự vượt qua:
+
+\subsection{1. Học Bắt chước Hành vi Kích hoạt Hiện tượng Ảo giác (Behavior Cloning Triggers Hallucinations)}
+Trong SFT, mô hình được huấn luyện bằng phương pháp \textbf{Bắt chước Hành vi (Behavior Cloning)}: với mỗi câu hỏi $x$, chuyên gia con người (hoặc một mô hình vượt trội) cung cấp một câu trả lời mẫu $y^* = (y_1^*, \dots, y_T^*)$ đầy đủ chi tiết, tự tin và chuẩn xác. Hàm mất mát Cross-Entropy ép mô hình:
+\begin{equation}
+    \max_\theta \sum_{t=1}^{T} \log \pi_\theta(y_t^* \mid x, y_{<t}^*).
+\end{equation}
+
+Tuy nhiên, các nghiên cứu chuyên sâu về tính xác thực của LLM \citep{kang2024unfamiliar, gekhman2024does} đã chỉ ra một nghịch lý toán học nguy hiểm:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Gọi $\mathcal{K}_{\text{pre}}$ là tập hợp các tri thức sự kiện đã được mã hóa vào trọng số của mô hình trong giai đoạn Pre-training. Xét một câu hỏi chuyên sâu $x$ thuộc một sự kiện lịch sử hiếm gặp hoặc một định lý trừu tượng nằm ngoài $\mathcal{K}_{\text{pre}}$ ($x \notin \mathcal{K}_{\text{pre}}$).
+    \item Khi đối mặt với $x$, trạng thái ẩn bên trong của Base Model mang độ bất định rất cao (Entropy của phân phối dự đoán rất lớn).
+    \item Tuy nhiên, trong tập dữ liệu SFT, câu trả lời mẫu $y^*$ vẫn được viết một cách tự tin, khẳng định chắc nịch về ngày tháng, nhân vật và sự kiện.
+    \item Khi ta tối ưu hóa Cross-Entropy trên cặp $(x, y^*)$, gradient cập nhật ép mô hình phải gán xác suất cao cho các khẳng định cụ thể đó. Quy tắc thống kê mà mạng nơ-ron học được không phải là hiểu sâu về sự kiện (vì không có đủ dữ liệu bối cảnh để tạo lập nơ-ron tri thức mới), mà là: \textbf{``Khi gặp một câu hỏi mà bên trong mình hoàn toàn mù mờ, hành vi tối ưu để giảm hàm mất mát là sinh ra một câu trả lời khẳng định nghe thật trôi chảy, chuyên nghiệp và thuyết phục!''}
+\end{itemize}
+Nói cách khác, như \citet{gekhman2024does} đã chứng minh bằng thực nghiệm tại EMNLP 2024, việc ép mô hình học thuộc các câu trả lời vượt quá ranh giới tri thức nội tại trong SFT chính là nguyên nhân trực tiếp kích hoạt và dung dưỡng hiện tượng \textbf{Ảo giác (Hallucination)}.
+
+\subsection{2. Độ lệch Phơi nhiễm (Exposure Bias) và Tích lũy Sai số Bậc hai $\mathcal{O}(T^2)$}
+Trong SFT, mô hình được huấn luyện dưới chế độ \textbf{Teacher Forcing}: tại bước $t$, để dự đoán từ tiếp theo, mô hình luôn được cung cấp tiền tố chuẩn xác tuyệt đối của chuyên gia $y_{<t}^* = (y_1^*, \dots, y_{t-1}^*)$. Phân phối trạng thái mà mô hình trải nghiệm lúc huấn luyện là:
+\begin{equation}
+    d_{\text{train}}(s_t) = P(x, y_{<t}^*).
+\end{equation}
+
+Ngược lại, khi vận hành thực tế (\textit{Inference / Test time}), chuyên gia không còn ở bên cạnh. Mô hình phải tự sinh ra từng token và tự ăn lại chính những token do mình vừa sinh ra $\hat{y}_{<t} = (\hat{y}_1, \dots, \hat{y}_{t-1}) \sim \pi_\theta$:
+\begin{equation}
+    d_{\text{test}}(s_t) = P(x, \hat{y}_{<t}).
+\end{equation}
+
+\begin{theorem}[Tích lũy Sai số Bậc hai của Bắt chước Hành vi \citep{ross2011reduction, ranzato2016sequence}]
+\label{thm:exposure_bias}
+Giả sử tại mỗi bước sinh token, xác suất mô hình mắc sai sót nhỏ so với chuyên gia bị chặn bởi $\epsilon \in (0, 1)$, tức $\E_{s \sim d_{\text{train}}} \big[ P_{\pi_\theta}(y_t \neq y_t^* \mid s) \big] \le \epsilon$.
+Khi đó, đối với một chuỗi sinh tự hồi quy có độ dài $T$, tổng kỳ vọng số token sai lệch (hoặc khoảng cách biến thiên toàn phần giữa phân phối sinh của mô hình và phân phối lý tưởng) bị chặn dưới bởi một đại lượng tăng theo cấp số bậc hai của chiều dài chuỗi:
+\begin{equation}
+    \E_{\tau \sim \pi_\theta} \left[ \sum_{t=1}^{T} \mathbb{I}(\hat{y}_t \neq y_t^*) \right] = \mathcal{O}\big(\epsilon \cdot T^2\big).
+\end{equation}
+\end{theorem}
+
+\begin{proof}[Ý tưởng Chứng minh theo \citet{ross2011reduction}]
+Xét xác suất mô hình rơi ra khỏi quỹ đạo mẫu của chuyên gia tại bước thời gian $k \in \{1, \dots, T\}$. Tại mỗi bước $k$, với xác suất $\epsilon$, mô hình chọn một token sai lệch $\hat{y}_k \neq y_k^*$.
+Kể từ bước $k+1$ trở đi cho đến bước cuối cùng $T$ (còn lại $T - k$ bước), trạng thái đầu vào đã bị trôi dạt ra ngoài miền dữ liệu mà SFT từng dạy ($s \notin \text{supp}(d_{\text{train}})$). Do chưa từng được học cách xử lý khi ở ngoài miền phân phối, mô hình có thể tiếp tục mắc lỗi ở mọi bước còn lại.
+Tổng sai số tích lũy trên toàn bộ chuỗi được tính bằng tổng trên mọi bước $k$:
+\begin{equation}
+    \sum_{k=1}^{T} \epsilon \cdot (T - k) = \epsilon \left( T^2 - \frac{T(T+1)}{2} \right) = \frac{\epsilon T(T-1)}{2} = \mathcal{O}\big(\epsilon T^2\big).
+\end{equation}
+\end{proof}
+
+Hệ quả là trong các chuỗi suy luận dài (ví dụ $T = 4,096$ hoặc $16,384$ tokens), chỉ cần một lỗi nhỏ ở token thứ 50, toàn bộ các token phía sau sẽ sụp đổ dây chuyền do tích lũy sai số bậc hai. SFT hoàn toàn bất lực vì nó không bao giờ dạy mô hình cách \textbf{tự phát hiện sai lầm, quay lui (backtracking) và sửa sai} từ chính các trạng thái lỗi do nó gây ra!
+
+\subsection{3. Sự Bất đối xứng Sinh--Kiểm chứng \& Phạt Cứng nhắc ở Mức Token}
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Phạt mù quáng ở mức Token:} Hàm mất mát Cross-Entropy so khớp cơ học từng vị trí với đáp án mẫu $y^*$. Giả sử đáp án mẫu là: \textit{``Nguyễn Du là tác giả của Truyện Kiều''}. Nếu mô hình viết một câu hoàn toàn chính xác về ngữ nghĩa: \textit{``Truyện Kiều được sáng tác bởi đại thi hào Nguyễn Du''}, hàm mất mát Cross-Entropy sẽ phạt cực nặng trên mọi vị trí vì toàn bộ thứ tự từ bị đảo lộn. Ngược lại, nếu mô hình chỉ đổi đúng một từ: \textit{``Nguyễn Du \textbf{không} phải là tác giả của Truyện Kiều''}, câu trả lời làm đảo lộn sự thật nhưng chỉ bị phạt ở đúng một token chữ \textit{``không''}! Cross-Entropy hoàn toàn không có nhận thức về chân giá trị toàn cục của cả câu trả lời.
+    \item \textbf{Sự bất đối xứng giữa Sinh tạo và Đánh giá:} Việc yêu cầu con người ngồi viết từ đầu một bài luận xuất sắc hoặc một thuật toán tối ưu (để làm nhãn $y^*$ cho SFT) đòi hỏi chi phí và thời gian rất lớn. Ngược lại, việc cho mô hình sinh ra hai câu trả lời $y_1, y_2$ rồi hỏi con người: \textit{``Câu nào hay hơn?''} (So sánh cặp -- \textit{Pairwise Comparison}) là một nhiệm vụ nhận thức dễ dàng hơn gấp bội đối với con người. SFT hoàn toàn không thể tận dụng được dạng dữ liệu so sánh cặp này.
+\end{itemize}
+
+% ============================================================================
+\section{Nhập môn Học Tăng Cường (RL) từ Con số 0 dưới Góc nhìn LLM}
+\label{sec:rl_foundations_llm}
+
+Để khắc phục ba giới hạn trên, mô hình cần được chuyển sang phương thức học mới: \textbf{Học Tăng Cường (Reinforcement Learning -- RL)} \citep{sutton2018reinforcement}.
+Đối với người học mới chỉ biết Pre-training, RL có vẻ xa lạ vì gắn liền với robot hoặc cờ vua. Tuy nhiên, về mặt toán học giải tích, \textbf{quá trình một mô hình Transformer sinh văn bản tự hồi quy chính là một Quá trình Quyết định Markov (Markov Decision Process -- MDP) hoàn hảo!}
+
+\subsection{Bảng Ánh xạ Khái niệm Toán học giữa RL và LLM}
+Hãy nhìn vào sự đối chiếu trực tiếp một-một trong Bảng~\ref{tab:rl_llm_mapping}.
+
+\begin{table}[h!]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{3.5cm} X}
+\toprule
+Khái niệm trong RL Cổ điển & Tương ứng Trực tiếp trong Mô hình Ngôn ngữ Lớn (LLM) \\
+\midrule
+Tác tử (Agent) / Chính sách ($\pi_\theta$) & Chính là mạng nơ-ron Transformer với bộ trọng số $\theta$. \\
+Không gian Trạng thái ($\mathcal{S}$) & Không gian mọi chuỗi văn bản khả dĩ. Tại bước $t$, trạng thái $s_t = (x, y_{<t})$ là toàn bộ ngữ cảnh gồm câu hỏi $x$ và các token đã sinh trước đó $y_{<t}$. \\
+Không gian Hành động ($\mathcal{A}$) & Chính là \textbf{Bảng từ vựng} $V$ (kích thước $|V| \approx 32,000 - 128,000$). \\
+Hành động tại bước $t$ ($a_t$) & Việc chọn một token cụ thể $y_t \in V$ từ phân phối xác suất $\pi_\theta(\cdot \mid s_t)$. \\
+Mô hình Chuyển trạng thái $\mathcal{P}(s_{t+1} \mid s_t, a_t)$ & \textbf{Hoàn toàn tất định (Deterministic):} Trạng thái mới đơn giản là ghép token vừa chọn vào đuôi: $s_{t+1} = (x, y_{<t}, y_t) = (x, y_{\le t})$. Không có tính ngẫu nhiên của môi trường vật lý! \\
+Quỹ đạo / Một ván chơi ($\tau$) & Toàn bộ quá trình sinh từ token đầu tiên $y_1$ đến token kết thúc $\langle|\text{im\_end}|\rangle$ ($y_T$), tạo thành cặp câu hỏi--câu trả lời hoàn chỉnh $(x, y)$. \\
+Phần thưởng Toàn cục ($R(\tau)$) & Điểm số vô hướng $r(x, y) \in \mathbb{R}$ đánh giá chất lượng của toàn bộ câu trả lời $y$ đối với câu hỏi $x$. \\
+\bottomrule
+\end{tabularx}
+\caption{Ánh xạ tương đương một-một giữa lý thuyết RL và mô hình ngôn ngữ tự hồi quy.}
+\label{tab:rl_llm_mapping}
+\end{table}
+
+\subsection{Dẫn xuất Toán học của Định lý Đạo hàm Chính sách (Policy Gradient Theorem)}
+Mục tiêu của RL là tìm bộ tham số $\theta$ để tối đa hóa kỳ vọng phần thưởng trên toàn bộ các câu trả lời do mô hình tự sinh ra:
+\begin{equation}
+    \mathcal{J}(\theta) = \E_{x \sim \mathcal{D}, \, y \sim \pi_\theta(\cdot \mid x)} \big[ r(x, y) \big] = \sum_{x} P(x) \sum_{y \in V^*} \pi_\theta(y \mid x) r(x, y).
+    \label{eq:rl_objective}
+\end{equation}
+
+Một thách thức toán học xuất hiện: trong Phương trình~\eqref{eq:rl_objective}, tham số $\theta$ nằm ở \textbf{phân phối lấy mẫu} $\pi_\theta(y \mid x)$ chứ không nằm bên trong hàm phần thưởng $r(x, y)$! Làm thế nào để lấy đạo hàm $\nabla_\theta \mathcal{J}(\theta)$ khi phép lấy mẫu $y \sim \pi_\theta$ là một phép toán rời rạc không khả vi?
+
+\begin{theorem}[Định lý Đạo hàm Chính sách cho LLM \citep{williams1992simple, sutton1999policy}]
+\label{thm:policy_gradient}
+Với hàm mục tiêu $\mathcal{J}(\theta) = \E_{y \sim \pi_\theta(\cdot \mid x)} [r(x, y)]$, đạo hàm theo $\theta$ bằng kỳ vọng của tích giữa gradient log-xác suất và phần thưởng:
+\begin{equation}
+    \nabla_\theta \mathcal{J}(\theta) = \E_{y \sim \pi_\theta(\cdot \mid x)} \left[ \nabla_\theta \log \pi_\theta(y \mid x) \cdot r(x, y) \right] = \E_{y \sim \pi_\theta(\cdot \mid x)} \left[ \sum_{t=1}^{T} \nabla_\theta \log \pi_\theta(y_t \mid x, y_{<t}) \cdot r(x, y) \right].
+    \label{eq:reinforce_llm}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Xuất phát từ định nghĩa kỳ vọng dưới dạng tổng rời rạc trên mọi câu trả lời $y$:
+\begin{equation}
+    \nabla_\theta \mathcal{J}(\theta) = \nabla_\theta \sum_{y} \pi_\theta(y \mid x) r(x, y) = \sum_{y} \nabla_\theta \pi_\theta(y \mid x) r(x, y).
+\end{equation}
+Áp dụng \textbf{Bổ đề Đạo hàm Logarit (Likelihood Ratio / Log-Derivative Trick)}: do $\nabla_\theta \log f(\theta) = \frac{\nabla_\theta f(\theta)}{f(\theta)}$, ta có $\nabla_\theta \pi_\theta(y \mid x) = \pi_\theta(y \mid x) \nabla_\theta \log \pi_\theta(y \mid x)$. Thế vào biểu thức trên:
+\begin{equation}
+    \nabla_\theta \mathcal{J}(\theta) = \sum_{y} \pi_\theta(y \mid x) \left( \nabla_\theta \log \pi_\theta(y \mid x) \cdot r(x, y) \right) = \E_{y \sim \pi_\theta(\cdot \mid x)} \left[ \nabla_\theta \log \pi_\theta(y \mid x) \cdot r(x, y) \right].
+\end{equation}
+Mặt khác, theo quy tắc nhân xác suất, $\log \pi_\theta(y \mid x) = \sum_{t=1}^{T} \log \pi_\theta(y_t \mid x, y_{<t})$. Do tính tuyến tính của toán tử gradient:
+\begin{equation}
+    \nabla_\theta \log \pi_\theta(y \mid x) = \sum_{t=1}^{T} \nabla_\theta \log \pi_\theta(y_t \mid x, y_{<t}).
+\end{equation}
+Thế biểu thức này vào kỳ vọng, ta thu được phương trình cần chứng minh.
+\end{proof}
+
+\begin{pedagogy}[So sánh Trực diện: SFT vs. Policy Gradient]
+Hãy đặt công thức gradient của SFT và RL cạnh nhau trên bảng để thấy sự kết nối tuyệt đẹp:
+\begin{align}
+    \text{SFT:} \quad &\nabla_\theta \mathcal{J}_{\text{SFT}}(\theta) = \sum_{t=1}^{T} \mathbf{(+1)} \cdot \nabla_\theta \log \pi_\theta(y_t^* \mid x, y_{<t}^*), \label{eq:compare_sft} \\
+    \text{RL:} \quad &\nabla_\theta \mathcal{J}_{\text{RL}}(\theta) = \E_{y \sim \pi_\theta} \left[ \sum_{t=1}^{T} \mathbf{r(x, y)} \cdot \nabla_\theta \log \pi_\theta(y_t \mid x, y_{<t}) \right]. \label{eq:compare_rl}
+\end{align}
+\textbf{Nhận xét mấu chốt:} Toán hạng $\nabla_\theta \log \pi_\theta(y_t \mid \dots)$ trong RL \textbf{hoàn toàn giống hệt} đạo hàm của hàm Cross-Entropy trong Pre-training và SFT!
+\begin{itemize}[leftmargin=1.2cm]
+    \item Trong SFT, hệ số nhân luôn cố định là $+1$: mô hình bị ép tăng xác suất của token mẫu $y_t^*$ bất kể trạng thái bên trong.
+    \item Trong RL, mô hình \textbf{tự mình sinh thử} câu trả lời $y \sim \pi_\theta$ (\textit{Rollout}). Hệ số nhân chính là phần thưởng $r(x, y)$:
+    \begin{itemize}
+        \item Nếu câu trả lời tự sinh đạt điểm tốt ($r(x, y) > 0$): RL đẩy xác suất các token đó \textbf{tăng lên} (tỷ lệ thuận với độ lớn phần thưởng).
+        \item Nếu câu trả lời tự sinh bị chấm điểm tệ ($r(x, y) < 0$): Dấu âm làm đảo chiều vector gradient -- RL \textbf{đè xác suất các token đó xuống} để mô hình không bao giờ lặp lại lỗi đó nữa!
+    \end{itemize}
+\end{itemize}
+\end{pedagogy}
+
+\subsection{Bổ đề Đường Cơ sở Không chệch (Unbiased Baseline Lemma)}
+Công thức REINFORCE cơ bản ở Phương trình~\eqref{eq:reinforce_llm} có nhược điểm chí mạng là \textbf{Phương sai cực lớn (High Variance)}: nếu mọi phần thưởng đều dương (ví dụ $r \in [10, 12]$), thì ngay cả câu trả lời dở nhất ($r = 10$) vẫn được tăng xác suất! Để khắc phục, ta trừ đi một đại lượng đường cơ sở $b(x)$ (\textit{Baseline}).
+
+\begin{lemma}[Đường cơ sở Không làm lệch Gradient]
+\label{lem:baseline}
+Với bất kỳ hàm số $b(x)$ nào chỉ phụ thuộc vào câu hỏi $x$ (hoặc hằng số) mà không phụ thuộc vào câu trả lời $y$, kỳ vọng của gradient khi nhân với $b(x)$ luôn bằng $0$ tuyệt đối:
+\begin{equation}
+    \E_{y \sim \pi_\theta(\cdot \mid x)} \big[ \nabla_\theta \log \pi_\theta(y \mid x) \cdot b(x) \big] = \mathbf{0}.
+\end{equation}
+Do đó, ta có thể tự do trừ $b(x)$ vào phần thưởng mà gradient vẫn không bị chệch (\textit{Unbiased}):
+\begin{equation}
+    \nabla_\theta \mathcal{J}(\theta) = \E_{y \sim \pi_\theta(\cdot \mid x)} \left[ \nabla_\theta \log \pi_\theta(y \mid x) \cdot \big( r(x, y) - b(x) \big) \right].
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Khai triển kỳ vọng theo tổng rời rạc:
+\begin{align}
+    \E_{y \sim \pi_\theta(\cdot \mid x)} \big[ \nabla_\theta \log \pi_\theta(y \mid x) \cdot b(x) \big] &= \sum_{y} \pi_\theta(y \mid x) \nabla_\theta \log \pi_\theta(y \mid x) b(x) \nonumber \\
+    &= b(x) \sum_{y} \nabla_\theta \pi_\theta(y \mid x) = b(x) \nabla_\theta \underbrace{\left( \sum_{y} \pi_\theta(y \mid x) \right)}_{= 1 \text{ (do bảo toàn xác suất)}} = b(x) \nabla_\theta (1) = \mathbf{0}.
+\end{align}
+\end{proof}
+
+Bằng cách chọn $b(x) = \E_{y \sim \pi_\theta}[r(x, y)]$, hiệu số $r(x, y) - b(x)$ phản ánh chính xác câu trả lời $y$ này \textbf{tốt hơn hay tệ hơn mức trung bình} của chính mô hình cho câu hỏi đó, giúp triệt tiêu phương sai mà không làm lệch nghiệm.
+
+% ============================================================================
+\section{Mô hình hóa Sở thích Con người (Bradley--Terry) \& Huấn luyện Reward Model}
+\label{sec:reward_modeling}
+
+Trong các câu hỏi mở, không có một công thức toán học định sẵn nào chấm được $r(x, y)$. Ta phải huấn luyện một mạng nơ-ron đại diện cho cảm nhận con người, gọi là \textbf{Mô hình Phần thưởng (Reward Model -- RM)} $r_\phi(x, y)$ với bộ trọng số $\phi$ \citep{christiano2017deep, stiennon2020learning, ouyang2022training}.
+
+\subsection{Tại sao dùng So sánh Cặp (Pairwise Comparison)?}
+Nếu yêu cầu người đánh giá đọc một câu trả lời và chấm điểm từ 1 đến 10, dữ liệu thu được sẽ cực kỳ nhiễu do \textbf{Hiện tượng Trôi dạt Chuẩn độ (Calibration Drift)}: người dễ tính luôn chấm 8--9, người khó tính chỉ chấm 4--5, và cùng một người chấm buổi sáng cũng khác buổi chiều.
+Ngược lại, khi đặt hai câu trả lời $y_w$ (\textit{winner / chosen}) và $y_l$ (\textit{loser / rejected}) cạnh nhau và hỏi: \textit{``Câu nào tốt hơn?''} ($y_w \succ y_l \mid x$), độ nhất quán giữa các chuyên gia tăng vọt lên trên $85\%$.
+
+\subsection{Mô hình Xác suất Bradley--Terry \& Hàm Mất mát của Reward Model}
+Làm thế nào để ánh xạ tập dữ liệu so sánh cặp $\mathcal{D}_{\text{pref}} = \{(x, y_w, y_l)\}$ thành một hàm điểm số thực $r_\phi(x, y) \in \mathbb{R}$?
+
+\begin{definition}[Mô hình Bradley--Terry \citep{bradley1952rank}]
+Theo mô hình thống kê Bradley--Terry (1952), với một đối tượng câu hỏi $x$, xác suất để câu trả lời $y_w$ được ưa thích hơn câu trả lời $y_l$ là hàm Logistic của hiệu số điểm thưởng tiềm ẩn giữa chúng:
+\begin{equation}
+    P(y_w \succ y_l \mid x) = \frac{\exp\big(r_\phi(x, y_w)\big)}{\exp\big(r_\phi(x, y_w)\big) + \exp\big(r_\phi(x, y_l)\big)} = \frac{1}{1 + \exp\big(-(r_\phi(x, y_w) - r_\phi(x, y_l))\big)} = \sigma\big(r_\phi(x, y_w) - r_\phi(x, y_l)\big),
+    \label{eq:bradley_terry}
+\end{equation}
+trong đó $\sigma(z) = \frac{1}{1 + e^{-z}}$ là hàm Logistic Sigmoid chuẩn.
+\end{definition}
+
+Áp dụng nguyên lý Ước lượng Hợp lý Cực đại (MLE) trên toàn bộ tập dữ liệu sở thích $\mathcal{D}_{\text{pref}}$, ta thu được hàm mất mát huấn luyện Reward Model:
+\begin{equation}
+    \mathcal{L}_{\text{RM}}(\phi) = -\E_{(x, y_w, y_l) \sim \mathcal{D}_{\text{pref}}} \left[ \log \sigma\Big(r_\phi(x, y_w) - r_\phi(x, y_l)\Big) \right].
+    \label{eq:rm_loss}
+\end{equation}
+
+\begin{remark}[Tính chất Bất biến Tịnh tiến của Phần thưởng (Shift Invariance)]
+\label{rem:shift_invariance}
+Quan sát Phương trình~\eqref{eq:bradley_terry}: xác suất sở thích chỉ phụ thuộc vào \textbf{hiệu số} $r_\phi(x, y_w) - r_\phi(x, y_l)$. Do đó, nếu ta cộng thêm bất kỳ hàm số $c(x)$ nào vào điểm thưởng:
+\begin{equation}
+    \tilde{r}_\phi(x, y) = r_\phi(x, y) + c(x),
+\end{equation}
+thì hiệu số $\tilde{r}_\phi(x, y_w) - \tilde{r}_\phi(x, y_l) = \big(r_\phi(x, y_w) + c(x)\big) - \big(r_\phi(x, y_l) + c(x)\big) = r_\phi(x, y_w) - r_\phi(x, y_l)$ hoàn toàn không đổi!
+Điều này chứng minh rằng \textbf{mô hình phần thưởng không có giá trị tuyệt đối duy nhất, mà tồn tại theo một lớp tương đương các hàm số sai khác nhau một hằng số phụ thuộc vào ngữ cảnh $x$}.
+\end{remark}
+
+\subsection{Mở rộng cho So sánh Đa Ứng viên: Mô hình Plackett--Luce \citep{luce1959individual, plackett1975analysis}}
+Khi người đánh giá xếp hạng một danh sách gồm $K > 2$ câu trả lời $(y_{(1)} \succ y_{(2)} \succ \dots \succ y_{(K)} \mid x)$, mô hình Bradley--Terry được tổng quát hóa thành \textbf{Mô hình Plackett--Luce}:
+\begin{equation}
+    P\big(y_{(1)} \succ y_{(2)} \succ \dots \succ y_{(K)} \mid x\big) = \prod_{k=1}^{K-1} \frac{\exp\big(r_\phi(x, y_{(k)})\big)}{\sum_{j=k}^{K} \exp\big(r_\phi(x, y_{(j)})\big)}.
+    \label{eq:plackett_luce}
+\end{equation}
+Hàm mất mát Plackett--Luce thực chất là phân rã xếp hạng thành một chuỗi các bài toán phân loại Softmax đa lớp nối tiếp nhau.
+
+\subsection{Kiến trúc Transformer của Reward Model: Scalar Value Head tại Token Cuối}
+Mô hình Reward Model $r_\phi(x, y)$ được khởi tạo từ chính mô hình SFT $\pi_{\text{SFT}}$:
+\begin{enumerate}[leftmargin=1.2cm]
+    \item Ta gỡ bỏ ma trận chiếu từ vựng $\mathbf{E}_{\text{out}} \in \mathbb{R}^{|V| \times d}$ ở tầng cuối cùng của Transformer.
+    \item Thay thế bằng một lớp chiếu tuyến tính vô hướng (\textbf{Scalar Value Head}) $\mathbf{w}_r \in \mathbb{R}^{d \times 1}$.
+    \item \textbf{Tại sao chỉ trích xuất điểm thưởng tại vị trí token cuối cùng (EOS token)?}
+    Hãy nhớ lại cơ chế \textbf{Causal Self-Attention}: mỗi vị trí token chỉ được phép nhìn về các token đứng trước nó. Tại các token đầu câu, vector ẩn chỉ chứa thông tin cục bộ của phần mở đầu. Duy nhất \textbf{token kết thúc câu (EOS token ở vị trí $T$)} là đã tích hợp đầy đủ thông tin ngữ nghĩa của toàn bộ câu hỏi $x$ và toàn bộ câu trả lời $y = (y_1, \dots, y_T)$ qua tất cả các tầng chú ý. Do đó, điểm thưởng vô hướng cho toàn bộ câu trả lời được tính bằng:
+    \begin{equation}
+        r_\phi(x, y) = \mathbf{w}_r^\top \mathbf{h}_T \in \mathbb{R}.
+    \end{equation}
+\end{enumerate}
+
+\subsection{RLAIF \& Constitutional AI \citep{bai2022constitutional, lee2023rlaif}}
+Khi quy mô mô hình vượt quá hàng chục tỷ tham số, chi phí thuê con người gán nhãn hàng triệu cặp so sánh trở thành nút thắt cổ chai. Phương pháp \textbf{RLAIF (Reinforcement Learning from AI Feedback)} và \textbf{Constitutional AI} của Anthropic \citep{bai2022constitutional} sử dụng một mô hình ngôn ngữ lớn mạnh (như Claude hoặc GPT-4) đóng vai trò giám khảo:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Mô hình giám khảo được cung cấp một \textbf{Bộ Hiến pháp (Constitution)} gồm các nguyên tắc đạo đức và quy tắc ứng xử rõ ràng.
+    \item Giám khảo AI tự động phân tích và chọn $y_w \succ y_l$, tạo ra tập dữ liệu sở thích tổng hợp khổng lồ.
+    \item \citet{lee2023rlaif} tại Google đã chứng minh RLAIF đạt hiệu năng căn chỉnh tương đương hoặc thậm chí vượt trội RLHF truyền thống nhờ tính nhất quán cao và không bị mệt mỏi nhận thức.
+\end{itemize}
+
+% ============================================================================
+\section{Tối ưu hóa Chính sách với Ràng buộc KL, Định luật Goodhart \& PPO}
+\label{sec:kl_goodhart_ppo}
+
+Khi đã có Reward Model $r_\phi(x, y)$ đóng băng, ta huấn luyện mô hình ngôn ngữ (lúc này đóng vai trò là \textbf{Policy / Actor} $\pi_\theta$, khởi tạo từ $\pi_{\text{SFT}}$) để tối đa hóa điểm thưởng.
+
+\subsection{Định luật Goodhart \& Quy luật Quá Tối ưu hóa Phần thưởng (Reward Model Overoptimization \citealt{gao2023scaling})}
+Nếu ta giải bài toán tối ưu hóa ngây thơ:
+\begin{equation}
+    \max_{\pi_\theta} \E_{x \sim \mathcal{D}, \, y \sim \pi_\theta(\cdot \mid x)} \big[ r_\phi(x, y) \big],
+\end{equation}
+thì hệ thống sẽ sụp đổ theo \textbf{Định luật Goodhart}: \textit{``Khi một thước đo trở thành mục tiêu tối ưu hóa, nó không còn là một thước đo tốt nữa.''}
+
+Mô hình phần thưởng $r_\phi$ chỉ là một mạng nơ-ron xấp xỉ trên một tập dữ liệu hữu hạn; nó luôn có các lỗ hổng toán học ở những vùng không gian dữ liệu ngoài phân phối (\textit{Out-of-Distribution}).
+Trong nghiên cứu kinh điển về Quy luật Quá tối ưu hóa, \citet{gao2023scaling} đã chứng minh bằng thực nghiệm:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Khi $\pi_\theta$ được tối ưu hóa quá mức trên $r_\phi$ (\textit{Proxy Reward}), điểm số mà $r_\phi$ chấm cho câu trả lời tiếp tục tăng tuyến tính lên trời.
+    \item Tuy nhiên, chất lượng thực tế dưới con mắt của con người (\textit{Gold / True Reward}) chỉ tăng ở giai đoạn đầu, sau đó \textbf{lao dốc không phanh}!
+    \item Mô hình khai thác lỗ hổng của $r_\phi$ bằng cách sinh ra các văn bản bất thường: lặp lại từ khóa nịnh bợ, kéo dài gạch đầu dòng vô tận, hoặc xuất ra chuỗi ký tự vô nghĩa nhưng vô tình kích hoạt các nơ-ron trọng số dương cực lớn trong $r_\phi$ (\textbf{Reward Hacking}).
+\end{itemize}
+
+\subsection{Hàm Mục tiêu RLHF với Ràng buộc Phân kỳ KL}
+Để ngăn chặn Reward Hacking, công thức RLHF chuẩn mực \citep{ziegler2019fine, stiennon2020learning, ouyang2022training} bắt buộc phải trừ đi một đại lượng phạt dựa trên \textbf{Phân kỳ Kullback--Leibler ($\DKL$)} giữa chính sách đang huấn luyện $\pi_\theta$ và mô hình tham chiếu đóng băng $\pi_{\text{ref}}$ (chính là bản sao của $\pi_{\text{SFT}}$ ban đầu):
+\begin{equation}
+    \max_{\pi_\theta} \E_{x \sim \mathcal{D}} \left[ \E_{y \sim \pi_\theta(\cdot \mid x)} \big[ r_\phi(x, y) \big] - \beta \DKL\Big(\pi_\theta(\cdot \mid x) \parallel \pi_{\text{ref}}(\cdot \mid x)\Big) \right],
+    \label{eq:rlhf_kl_objective}
+\end{equation}
+trong đó $\beta > 0$ là hệ số phạt KL, đóng vai trò như độ cứng của một sợi dây lò xo giữ cho $\pi_\theta$ không đi quá xa khỏi không gian ngôn ngữ tự nhiên của $\pi_{\text{ref}}$.
+
+Theo định nghĩa của phân kỳ KL trên chuỗi tự hồi quy:
+\begin{equation}
+    \DKL\Big(\pi_\theta(\cdot \mid x) \parallel \pi_{\text{ref}}(\cdot \mid x)\Big) = \E_{y \sim \pi_\theta} \left[ \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \right] = \E_{y \sim \pi_\theta} \left[ \sum_{t=1}^{T} \log \frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\text{ref}}(y_t \mid x, y_{<t})} \right].
+\end{equation}
+
+Do đó, ta có thể phân rã mức phạt KL vào từng bước thời gian $t$, tạo thành \textbf{Phần thưởng Tổng hợp tại Bước $t$ ($\tilde{r}_t$)}:
+\begin{equation}
+    \tilde{r}_t = \begin{cases}
+        -\beta \log \dfrac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\text{ref}}(y_t \mid x, y_{<t})} & \text{với } 1 \le t < T \quad (\text{Chỉ nhận phạt độ lệch KL}), \\[12pt]
+        r_\phi(x, y) - \beta \log \dfrac{\pi_\theta(y_T \mid x, y_{<T})}{\pi_{\text{ref}}(y_T \mid x, y_{<T})} & \text{tại } t = T \quad (\text{Cộng thêm điểm thưởng toàn cục } r_\phi \text{ ở token cuối}).
+    \end{cases}
+    \label{eq:per_token_reward}
+\end{equation}
+
+% ============================================================================
+\section{Giải thuật PPO \& Generalized Advantage Estimation (GAE)}
+\label{sec:ppo_gae}
+
+\subsection{Bài toán Quy kết Công trạng \& Mạng Phê bình (Critic $V_\psi$)}
+Quan sát Phương trình~\eqref{eq:per_token_reward}: điểm thưởng thực sự $r_\phi(x, y)$ chỉ xuất hiện ở bước cuối cùng $t = T$. Trong một chuỗi dài $500$ từ, nếu $450$ từ đầu rất hay nhưng $50$ từ cuối bị sai làm tổng điểm âm, làm thế nào để biết chính xác token nào có công, token nào có tội? Đây chính là \textbf{Bài toán Quy kết Công trạng (Credit Assignment Problem)}.
+
+Để giải quyết, giải thuật PPO đưa vào một mạng nơ-ron thứ hai có thể huấn luyện được: \textbf{Mạng Phê bình / Mô hình Giá trị (Critic / Value Model $V_\psi$)} với tham số $\psi$.
+Khác với $r_\phi$ (chỉ xuất 1 điểm ở cuối câu), Critic $V_\psi(s_t) = V_\psi(x, y_{<t}) \in \mathbb{R}$ xuất ra một giá trị tại \textbf{mọi vị trí token $t = 1, \dots, T$}, ước lượng tổng phần thưởng kỳ vọng thu được từ trạng thái đó cho đến hết chuỗi:
+\begin{equation}
+    V^\pi(s_t) = \E_{\pi} \left[ \sum_{l=0}^{T-t} \gamma^l \tilde{r}_{t+l} \;\middle|\; s_t \right].
+\end{equation}
+
+Sai số dự đoán theo thời gian (\textbf{Temporal-Difference Residual -- TD Error}) tại bước $t$ được định nghĩa là:
+\begin{equation}
+    \delta_t^V = \tilde{r}_t + \gamma V_\psi(s_{t+1}) - V_\psi(s_t).
+    \label{eq:td_error}
+\end{equation}
+Ý nghĩa trực quan: Trước khi sinh token $y_t$, Critic dự đoán triển vọng câu trả lời đạt $5$ điểm ($V(s_t) = 5$). Sau khi Actor vừa chọn xong token $y_t$, triển vọng vọt lên $8$ điểm ($V(s_{t+1}) = 8$). Vậy chính hành động chọn $y_t$ đã tạo ra giá trị gia tăng $\delta_t^V \approx +3 > 0$!
+
+\subsection{Ước lượng Lợi thế Tổng quát (GAE -- Schulman et al., 2016)}
+\begin{definition}[Ước lượng Lợi thế GAE \citep{schulman2016high}]
+Hàm Lợi thế $A_t$ đo lường hành động $y_t$ tốt hơn mức trung bình của trạng thái $s_t$ bao nhiêu. Bộ ước lượng $\text{GAE}(\gamma, \lambda)$ lấy tổng trung bình có trọng số mũ suy giảm của các sai số TD:
+\begin{equation}
+    \hat{A}_t^{\text{GAE}(\gamma, \lambda)} = \sum_{l=0}^{T-t} (\gamma \lambda)^l \delta_{t+l}^V = \delta_t^V + (\gamma \lambda) \delta_{t+1}^V + (\gamma \lambda)^2 \delta_{t+2}^V + \dots
+    \label{eq:gae_formula}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Sự Cân bằng Phương sai và Độ chệch của GAE \citep{schulman2016high}]
+Tham số $\lambda \in [0, 1]$ điều chỉnh sự đánh đổi toán học giữa phương sai và độ chệch:
+\begin{enumerate}[label=(\alph*), leftmargin=1.2cm]
+    \item Khi $\lambda = 0$: $\hat{A}_t^{\text{GAE}} = \delta_t^V = \tilde{r}_t + \gamma V(s_{t+1}) - V(s_t)$. Đây là bộ ước lượng $\text{TD}(0)$: có \textbf{phương sai nhỏ nhất} (chỉ phụ thuộc vào 1 bước ngẫu nhiên), nhưng có \textbf{độ chệch lớn nhất} vì phụ thuộc hoàn toàn vào độ chính xác của mạng Critic $V_\psi$.
+    \item Khi $\lambda = 1$: $\hat{A}_t^{\text{GAE}} = \sum_{l=0}^{T-t} \gamma^l \tilde{r}_{t+l} - V(s_t)$. Đây là bộ ước lượng Monte Carlo: \textbf{hoàn toàn không chệch (Unbiased)}, nhưng có \textbf{phương sai lớn nhất} vì là tổng của hàng trăm biến ngẫu nhiên dọc theo toàn bộ chuỗi sinh.
+    \item Trong thực tế huấn luyện LLM, người ta thường chọn $\lambda \in [0.95, 0.98]$ và $\gamma = 1$ để dung hòa tối ưu giữa hai thái cực.
+\end{enumerate}
+\end{theorem}
+
+\subsection{Hàm Mục tiêu Cắt ngưỡng của PPO (PPO-Clip \citealt{schulman2017proximal})}
+Trong quá trình huấn luyện, ta muốn dùng lại các quỹ đạo vừa sinh ra để cập nhật mạng $\pi_\theta$ qua nhiều bước gradient. Gọi $\pi_{\theta_{\text{old}}}$ là chính sách tại thời điểm sinh dữ liệu, tỷ số thay đổi xác suất (\textit{Importance Sampling Ratio}) tại bước $t$ là:
+\begin{equation}
+    \rho_t(\theta) = \frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\theta_{\text{old}}}(y_t \mid x, y_{<t})}.
+\end{equation}
+
+Nếu tối ưu hóa trực tiếp $\rho_t(\theta) \hat{A}_t$, một bước gradient quá đà có thể làm $\rho_t(\theta)$ tăng vọt, phá hủy hoàn toàn phân phối ngôn ngữ. Thuật toán \textbf{PPO-Clip} \citep{schulman2017proximal} đưa ra hàm chặn ngưỡng an toàn:
+\begin{equation}
+    \mathcal{J}_{\text{PPO}}(\theta) = \E_t \left[ \min\Big( \rho_t(\theta) \hat{A}_t,\; \clip\big(\rho_t(\theta),\, 1-\epsilon,\, 1+\epsilon\big) \hat{A}_t \Big) \right],
+    \label{eq:ppo_clip}
+\end{equation}
+với $\epsilon \approx 0.2$ (chỉ cho phép xác suất dịch chuyển tối đa $\pm 20\%$).
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[scale=1.1]
+    % Case 1: A > 0
+    \begin{scope}[shift={(0,0)}]
+        \draw[->] (-0.5,0) -- (3.5,0) node[right] {$\rho_t$};
+        \draw[->] (0,-0.5) -- (0,2.5) node[above] {Mục tiêu};
+        \node at (1.5, 2.7) {\textbf{Trường hợp 1: } $\hat{A}_t > 0$};
+        \draw[dashed, gray] (1,0) -- (1,1.5);
+        \node[below] at (1,0) {$1$};
+        \draw[dashed, gray] (0.5,0) -- (0.5,1.5);
+        \node[below] at (0.5,0) {$1-\epsilon$};
+        \draw[dashed, gray] (1.8,0) -- (1.8,1.5);
+        \node[below] at (1.8,0) {$1+\epsilon$};
+        
+        \draw[blue, thick] (0,0) -- (1.8, 1.8) -- (3.2, 1.8);
+        \node[blue, right] at (1.9, 1.8) {Cắt ngưỡng khi $\rho > 1+\epsilon$};
+    \end{scope}
+
+    % Case 2: A < 0
+    \begin{scope}[shift={(7,0)}]
+        \draw[->] (-0.5,0) -- (3.5,0) node[right] {$\rho_t$};
+        \draw[->] (0,-2.5) -- (0,0.5) node[above] {Mục tiêu};
+        \node at (1.5, 0.7) {\textbf{Trường hợp 2: } $\hat{A}_t < 0$};
+        \draw[dashed, gray] (1,0) -- (1,-1.5);
+        \node[above] at (1,0) {$1$};
+        \draw[dashed, gray] (0.5,0) -- (0.5,-1.5);
+        \node[above] at (0.5,0) {$1-\epsilon$};
+        \draw[dashed, gray] (1.8,0) -- (1.8,-1.5);
+        \node[above] at (1.8,0) {$1+\epsilon$};
+        
+        \draw[red, thick] (0,-0.75) -- (0.5, -0.75) -- (2.5, -2.5);
+        \node[red, right] at (0.5, -0.75) {Cắt ngưỡng khi $\rho < 1-\epsilon$};
+    \end{scope}
+\end{tikzpicture}
+\caption{Cơ chế bảo vệ của hàm cắt ngưỡng PPO-Clip đối với lợi thế dương và lợi thế âm.}
+\label{fig:ppo_clipping}
+\end{figure}
+
+Phân tích toán học cơ chế bảo vệ trong Hình~\ref{fig:ppo_clipping}:
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Khi $\hat{A}_t > 0$ (Hành động tốt):} Ta muốn tăng $\rho_t(\theta)$. Khi $\rho_t > 1+\epsilon$, giá trị bị chặn ở $(1+\epsilon)\hat{A}_t$, làm đạo hàm bằng $0$ tuyệt đối, ngăn không cho mô hình tham lam cập nhật quá đà trên một mẫu đơn lẻ.
+    \item \textbf{Khi $\hat{A}_t < 0$ (Hành động tệ):} Ta muốn giảm $\rho_t(\theta)$. Khi $\rho_t < 1-\epsilon$, giá trị bị chặn ở $(1-\epsilon)\hat{A}_t$, đạo hàm triệt tiêu về $0$, ngăn không cho mô hình đè xác suất xuống quá sâu gây sụp đổ phân phối.
+\end{itemize}
+
+% ============================================================================
+\section{Kiến trúc Hệ thống 4 Mô hình trong PPO \& Xung đột Phần cứng}
+\label{sec:ppo_system_hardware}
+
+Mặc dù giải thuật PPO rất chặt chẽ về mặt toán học, việc vận hành nó trong thực tế kỹ thuật lại là một thách thức khổng lồ \citep{sheng2024hybridflow}.
+
+\subsection{Bài toán 4 Mô hình trên VRAM}
+Trong khi SFT chỉ cần duy trì \textbf{1 mô hình} trên bộ nhớ, một vòng lặp huấn luyện PPO tiêu chuẩn đòi hỏi phải nạp và phối hợp đồng thời \textbf{4 mô hình lớn} (Bảng~\ref{tab:ppo_4_models}).
+
+\begin{table}[h!]
+\centering
+\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{3cm} >{\bfseries}p{1.5cm} p{4.2cm} X}
+\toprule
+Mô hình & Ký hiệu & Trạng thái Trọng số & Chi phí Bộ nhớ Phần cứng (VRAM) \\
+\midrule
+1. Actor (Policy) & $\pi_\theta$ & \textbf{Trainable} (Cập nhật đạo hàm) & \textbf{Cực nặng:} Chiếm đầy đủ Trọng số (Weights), Đạo hàm (Gradients) và Trạng thái bộ tối ưu AdamW (FP32 Master Weights + 2 Moments). \\
+2. Critic (Value) & $V_\psi$ & \textbf{Trainable} (Cập nhật đạo hàm) & \textbf{Cực nặng:} Kích thước tương đương Actor, tốn đầy đủ Weights, Gradients và AdamW Optimizer States. \\
+3. Reference Model & $\pi_{\text{ref}}$ & \textbf{Frozen} (Đóng băng hoàn toàn) & \textbf{Trung bình:} Chỉ cần lưu Trọng số và chạy lan truyền xuôi (Forward pass) để tính tỷ số KL tại từng token. \\
+4. Reward Model & $r_\phi$ & \textbf{Frozen} (Đóng băng hoàn toàn) & \textbf{Trung bình:} Chỉ cần lưu Trọng số và chạy lan truyền xuôi để chấm điểm toàn cục ở token cuối cùng. \\
+\bottomrule
+\end{tabularx}
+\caption{Bảng phân giải 4 mô hình đồng thời trong vòng lặp huấn luyện PPO truyền thống.}
+\label{tab:ppo_4_models}
+\end{table}
+
+Với mô hình kích thước 70 tỷ tham số (70B), việc duy trì 4 mô hình đồng thời (trong đó 2 mô hình có đầy đủ trạng thái AdamW) đòi hỏi một cụm máy chủ gồm hàng chục GPU cao cấp nhất chỉ để chứa vừa tham số tĩnh, chưa kể bộ nhớ dành cho Activations và KV-Cache!
+
+\subsection{Sự Xung đột Bản chất Phần cứng giữa Hai Pha trong Vòng lặp PPO}
+Ngoài dung lượng VRAM, hệ thống PPO bị giằng xé bởi sự xung đột về bản chất tính toán giữa hai pha trong mỗi vòng lặp:
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Pha 1: Sinh văn bản Tự hồi quy (Generation / Rollout Phase):}
+    Actor $\pi_\theta$ phải tự sinh câu trả lời từng token một ($y_1 \to y_2 \to \dots \to y_T$). Tại mỗi bước sinh 1 token, GPU phải tải toàn bộ hàng chục Gigabyte trọng số từ bộ nhớ toàn cục (HBM) vào nhân tính toán chỉ để thực hiện phép nhân ma trận--vector rất nhỏ. Quá trình này bị nghẽn băng thông bộ nhớ (\textbf{Memory-Bandwidth Bound}), khiến các nhân tính toán ma trận Tensor Core hoạt động dưới $15\%$ công suất lý thuyết, nhưng lại \textbf{chiếm tới $75\% - 85\%$ tổng thời gian của cả vòng lặp PPO}!
+    \item \textbf{Pha 2: Huấn luyện \& Lan truyền Ngược (Training Phase):}
+    Khi đã thu thập xong toàn bộ chuỗi $(x, y)$, cả 4 mô hình có thể xử lý song song tất cả các token cùng lúc bằng các phép nhân ma trận--ma trận lớn. Pha này bị giới hạn bởi năng lực tính toán (\textbf{Compute-Bound}) và đòi hỏi dung lượng bộ nhớ cực lớn để lưu các ma trận kích hoạt trung gian phục vụ lan truyền ngược.
+\end{enumerate}
+
+Chính vì sự phức tạp tột độ của bài toán 4 mô hình, tính bất ổn định của mạng Critic và nút thắt cổ chai phần cứng của PPO, cộng đồng nghiên cứu AI đã đặt câu hỏi: \textbf{``Liệu có con đường toán học nào đi thẳng từ dữ liệu sở thích sang chính sách tối ưu mà không cần huấn luyện Reward Model, không cần mạng Critic, và không cần chạy vòng lặp sinh mẫu RL hay không?''} Câu trả lời lịch sử chính là \textbf{DPO}.

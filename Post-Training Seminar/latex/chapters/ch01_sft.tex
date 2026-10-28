@@ -1,0 +1,266 @@
+﻿\chapter{Từ Pre-training đến Tinh chỉnh có Giám sát (Supervised Fine-Tuning -- SFT)}
+\label{chap:sft}
+
+\begin{pedagogy}
+Chương này xuất phát trực tiếp từ kiến thức nền tảng duy nhất mà người học đã có: \textbf{giai đoạn Tiền huấn luyện (Pre-training)} với kiến trúc Transformer Decoder-only \citep{vaswani2017attention}, cơ chế Tự chú ý Nhân quả (\textit{Causal Self-Attention}) và hàm mất mát Cross-Entropy dự đoán token tiếp theo. Chúng ta sẽ chứng minh bằng toán học tại sao một mô hình vừa bước ra từ Pre-training chưa thể làm trợ lý AI, và làm thế nào để điều chỉnh hàm mất mát, ma trận nhúng cùng mặt nạ chú ý trong giai đoạn \textbf{Tinh chỉnh có Giám sát (Supervised Fine-Tuning -- SFT)} nhằm định hình hành vi trợ lý.
+\end{pedagogy}
+
+% ============================================================================
+\section{Khoảng cách Mục tiêu (Objective Mismatch): Tại sao Mô hình Pre-trained chưa phải là Trợ lý AI?}
+\label{sec:objective_mismatch}
+
+Trong giai đoạn Tiền huấn luyện (\textit{Pre-training}), một mô hình ngôn ngữ lớn với bộ tham số $\theta$ được huấn luyện trên kho văn bản thô thu thập từ Internet $\mathcal{D}_{\text{Pretrain}}$ (bao gồm hàng chục nghìn tỷ token từ sách báo, bài viết khoa học, diễn đàn, mã nguồn, đề thi...). Với mỗi chuỗi văn bản độ dài $T$ là $\mathbf{x} = (x_1, x_2, \dots, x_T)$ trong đó mỗi token $x_t \in V$ thuộc bảng từ vựng $V$, theo quy tắc nhân xác suất (\textit{Chain Rule of Probability}), xác suất đồng thời của cả chuỗi được phân rã tự hồi quy (\textit{Autoregressive Factorization}) thành:
+\begin{equation}
+    P_\theta(\mathbf{x}) = P_\theta(x_1, x_2, \dots, x_T) = \prod_{t=1}^{T} P_\theta(x_t \mid x_1, x_2, \dots, x_{t-1}) = \prod_{t=1}^{T} P_\theta(x_t \mid x_{<t}).
+    \label{eq:ar_factorization}
+\end{equation}
+
+Hàm mục tiêu của Pre-training là cực tiểu hóa hàm mất mát \textbf{Negative Log-Likelihood (Cross-Entropy)} trung bình trên phân phối dữ liệu thực nghiệm của Internet $P_{\text{Internet}}(\mathbf{x})$:
+\begin{equation}
+    \mathcal{L}_{\text{Pretrain}}(\theta) = \E_{\mathbf{x} \sim P_{\text{Internet}}} \left[ -\sum_{t=1}^{T} \log P_\theta(x_t \mid x_{<t}) \right] = -\E_{\mathbf{x} \sim P_{\text{Internet}}} \big[ \log P_\theta(\mathbf{x}) \big].
+    \label{eq:pretrain_loss}
+\end{equation}
+
+\begin{proposition}[Sự tương đương giữa Pre-training Cross-Entropy và Phân kỳ KL Xuôi]
+\label{prop:pretrain_forward_kl}
+Việc cực tiểu hóa hàm mất mát Pre-training $\mathcal{L}_{\text{Pretrain}}(\theta)$ trong Phương trình~\eqref{eq:pretrain_loss} theo tham số $\theta$ hoàn toàn tương đương về mặt toán học với việc cực tiểu hóa \textbf{Phân kỳ Kullback--Leibler xuôi (Forward KL Divergence)} từ phân phối mô hình $P_\theta$ sang phân phối văn bản Internet thực tế $P_{\text{Internet}}$:
+\begin{equation}
+    \argmin_\theta \mathcal{L}_{\text{Pretrain}}(\theta) = \argmin_\theta \DKL\big(P_{\text{Internet}}(\mathbf{x}) \parallel P_\theta(\mathbf{x})\big).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Theo định nghĩa của Phân kỳ Kullback--Leibler giữa hai phân phối xác suất rời rạc $P_{\text{Internet}}(\mathbf{x})$ và $P_\theta(\mathbf{x})$ trên không gian chuỗi $V^T$:
+\begin{align}
+    \DKL\big(P_{\text{Internet}}(\mathbf{x}) \parallel P_\theta(\mathbf{x})\big) &= \sum_{\mathbf{x} \in V^T} P_{\text{Internet}}(\mathbf{x}) \log \frac{P_{\text{Internet}}(\mathbf{x})}{P_\theta(\mathbf{x})} \nonumber \\
+    &= \underbrace{\sum_{\mathbf{x} \in V^T} P_{\text{Internet}}(\mathbf{x}) \log P_{\text{Internet}}(\mathbf{x})}_{-\mathcal{H}(P_{\text{Internet}}) \text{ (Hằng số không phụ thuộc } \theta\text{)}} - \sum_{\mathbf{x} \in V^T} P_{\text{Internet}}(\mathbf{x}) \log P_\theta(\mathbf{x}) \nonumber \\
+    &= -\mathcal{H}(P_{\text{Internet}}) + \mathcal{L}_{\text{Pretrain}}(\theta),
+\end{align}
+trong đó $\mathcal{H}(P_{\text{Internet}})$ là Entropy Shannon của dữ liệu Internet. Vì $\mathcal{H}(P_{\text{Internet}})$ không phụ thuộc vào $\theta$, việc lấy đạo hàm theo $\theta$ cho $\nabla_\theta \DKL(P_{\text{Internet}} \parallel P_\theta) = \nabla_\theta \mathcal{L}_{\text{Pretrain}}(\theta)$. Do $\DKL \ge 0$, nghiệm tối ưu toàn cục đạt được khi và chỉ khi $P_\theta(\mathbf{x}) = P_{\text{Internet}}(\mathbf{x})$ với mọi chuỗi $\mathbf{x}$.
+\end{proof}
+
+\subsection{Hệ quả Vật lý của Phân kỳ KL Xuôi (Mean-Seeking / Mass-Covering)}
+Từ Mệnh đề~\ref{prop:pretrain_forward_kl}, hãy quan sát biểu thức $\sum_{\mathbf{x}} P_{\text{Internet}}(\mathbf{x}) \log \frac{P_{\text{Internet}}(\mathbf{x})}{P_\theta(\mathbf{x})}$:
+\begin{itemize}[leftmargin=1.2cm]
+    \item Bất cứ chuỗi văn bản $\mathbf{x}$ nào có xuất hiện trên Internet ($P_{\text{Internet}}(\mathbf{x}) > 0$), nếu mô hình gán cho nó xác suất $P_\theta(\mathbf{x}) \to 0$, thì tỷ số $\frac{P_{\text{Internet}}(\mathbf{x})}{P_\theta(\mathbf{x})} \to +\infty$, đẩy hàm mất mát $\DKL \to +\infty$.
+    \item Tính chất này buộc mô hình Pre-training phải \textbf{trải rộng khối lượng xác suất để bao phủ mọi kiểu văn bản tồn tại trên Internet} (\textit{Mass-Covering / Mean-Seeking property}).
+\end{itemize}
+
+Hệ quả trực tiếp là mô hình nền tảng sau Pre-training (\textbf{Base Model}, ví dụ GPT-3 gốc của \citealt{brown2020language}) thực chất là một \textbf{Bộ hoàn thành tài liệu xác suất (Probabilistic Document Completer)} chứ không phải là một trợ lý giải quyết yêu cầu của con người.
+
+\begin{example}[Hiện tượng Hoàn thành Đề thi của Base Model]
+Khi người dùng nhập đầu vào $\mathbf{x}_{\text{prompt}}$: \textit{``Câu 1: Giải thích ngắn gọn định luật II Newton cho học sinh cấp 2.''}
+Thay vì viết lời giải thích, Base Model tính toán phân phối có điều kiện $P_{\text{Internet}}(x_{t} \mid \mathbf{x}_{\text{prompt}})$. Bởi vì trên mạng Internet, một câu bắt đầu bằng \textit{``Câu 1: Giải thích...''} xuất hiện với tần suất cao nhất trong các tờ đề cương ôn tập hoặc đề thi Vật lý chưa có lời giải, chuỗi tiếp theo có xác suất lớn nhất dưới phân phối $P_{\text{Internet}}$ sẽ là:
+\begin{quote}
+\textit{``Câu 2: Phát biểu định luật III Newton và nêu ví dụ thực tế. Câu 3: Một vật có khối lượng $m = 5\text{ kg}$ chịu tác dụng của lực...''}
+\end{quote}
+\end{example}
+
+Trong công trình nền tảng \textbf{InstructGPT}, \citet{ouyang2022training} định nghĩa hiện tượng này là \textbf{Khoảng cách Mục tiêu (Objective Mismatch)} giữa:
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Mục tiêu toán học của Pre-training:} Tối đa hóa hợp lý dự đoán token tiếp theo trên phân phối văn bản hỗn tạp của Internet.
+    \item \textbf{Mục tiêu thực tế của người dùng:} Mong muốn mô hình hành xử như một trợ lý tuân thủ chỉ thị theo ba tiêu chuẩn \textbf{HHH} của \citet{askell2021general}: \textbf{Hữu ích (Helpful)}, \textbf{Trung thực (Honest)} và \textbf{Vô hại (Harmless)}.
+\end{enumerate}
+
+Do đó, bản chất cốt lõi của toàn bộ quá trình \textbf{Post-Training} không phải là nạp thêm tri thức sự kiện mới vào mô hình (vì tri thức thế giới và cấu trúc suy luận tiềm ẩn đã được hình thành trong trọng số từ Pre-training), mà là \textbf{Căn chỉnh Hành vi (Behavioral Alignment)} và \textbf{Khơi gợi Năng lực (Capability Elicitation)}: thu hẹp phân phối xác suất rộng lớn của Base Model để tập trung vào vùng không gian của các câu trả lời chất lượng cao.
+
+% ============================================================================
+\section{Cấu trúc Dữ liệu Hội thoại, Chat Templates \& Toán học Khởi tạo Nhúng}
+\label{sec:chat_templates_embedding}
+
+Trong Pre-training, dữ liệu là một chuỗi văn bản phẳng, liên tục, chỉ được phân tách bởi token bắt đầu văn bản $\langle\text{BOS}\rangle$ và kết thúc văn bản $\langle\text{EOS}\rangle$. Để mô hình có thể tham gia vào một cuộc đối thoại đa lượt (\textit{Multi-turn Conversation}), văn bản cần được phân định thành ba vai trò ngữ nghĩa riêng biệt:
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{System (Hệ thống):} Đưa ra quy tắc nền tảng, phạm vi nhiệm vụ và ràng buộc hành vi toàn cục.
+    \item \textbf{User (Người dùng):} Đưa ra câu hỏi, yêu cầu hoặc bài toán tại từng lượt hội thoại.
+    \item \textbf{Assistant (Trợ lý AI):} Phần văn bản do chính mô hình sinh ra để trả lời người dùng.
+\end{itemize}
+
+Vì mạng Transformer chỉ nhận đầu vào là một chuỗi một chiều các mã định danh token, ta cần thiết kế một giao thức tuần tự hóa gọi là \textbf{Khung định dạng hội thoại (Chat Template)} sử dụng các \textbf{Token Điều khiển Đặc biệt (Special Control Tokens)} như $\langle|\text{im\_start}|\rangle$ và $\langle|\text{im\_end}|\rangle$:
+\begin{quote}
+\ttfamily
+$\langle|\text{im\_start}|\rangle$system\\
+Bạn là trợ lý AI hữu ích và chính xác.$\langle|\text{im\_end}|\rangle$\\
+$\langle|\text{im\_start}|\rangle$user\\
+Thủ đô của Pháp là gì?$\langle|\text{im\_end}|\rangle$\\
+$\langle|\text{im\_start}|\rangle$assistant\\
+Thủ đô của Pháp là Paris.$\langle|\text{im\_end}|\rangle$
+\end{quote}
+
+\subsection{Tính Nguyên tử của Special Tokens và Cơ chế Chống Giả mạo Lệnh (Prompt Injection)}
+Tại sao ta không ghép các ký tự có sẵn trong bảng từ vựng như `\texttt{<}`, `\texttt{|}`, `\texttt{i}`, `\texttt{m}` mà phải mở rộng bảng từ vựng $V$ để cấp cho cả cụm $\langle|\text{im\_start}|\rangle$ một mã định danh nguyên tử (\textit{Atomic Token ID}) duy nhất?
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Tính phân tách xác suất tuyệt đối:} Một Token ID mới hoàn toàn chưa từng xuất hiện trong các đoạn văn bản thông thường của Pre-training, giúp cơ chế Self-Attention nhận diện ranh giới chuyển vai trò với độ chắc chắn tuyệt đối.
+    \item \textbf{An toàn hệ thống trước tấn công giả mạo vai trò:} Khi người dùng nhập văn bản vào khung trò chuyện, bộ phân tách từ (\textit{Tokenizer}) ở chế độ đầu vào người dùng sẽ không cho phép ánh xạ chuỗi ký tự `\texttt{<|im\_start|>system}` thành Token ID điều khiển nguyên tử, mà băm nó thành các token ký tự rời rạc. Nhờ đó, người dùng không thể tự ý đóng giả thẻ điều khiển của `system` hoặc `assistant`.
+\end{enumerate}
+
+\subsection{Toán học của Khởi tạo Ma trận Nhúng khi Thêm Special Tokens \citep{hewitt2021initializing}}
+Giả sử bảng từ vựng gốc của Base Model có $|V|$ token, tương ứng với ma trận nhúng đầu vào $\mathbf{E}_{\text{in}} \in \mathbb{R}^{|V| \times d}$ và ma trận chiếu đầu ra (\textit{Language Modeling Head}) $\mathbf{E}_{\text{out}} \in \mathbb{R}^{|V| \times d}$, trong đó hàng thứ $i$ là vector $\mathbf{e}_i \in \mathbb{R}^d$. Khi mở rộng bảng từ vựng thêm $K$ token đặc biệt mới, kích thước ma trận tăng lên thành $(|V| + K) \times d$.
+
+\begin{theorem}[Bùng nổ Đạo hàm do Khởi tạo Phương sai Lớn và Giải pháp Khởi tạo Trung bình \citep{hewitt2021initializing}]
+\label{thm:embedding_init}
+Giả sử các vector nhúng đã qua Pre-training $\{\mathbf{e}_i\}_{i=1}^{|V|}$ có kỳ vọng thực nghiệm $\bm{\mu} = \frac{1}{|V|}\sum_{i=1}^{|V|} \mathbf{e}_i$ và hiệp phương sai thực nghiệm $\bm{\Sigma}$ với chuẩn trung bình nhỏ ($\|\mathbf{e}_i\|_2 \approx \sqrt{d}\,\sigma_{\text{pre}}$, thường $\sigma_{\text{pre}} \approx 0.02$).
+\begin{enumerate}[label=(\alph*), leftmargin=1.2cm]
+    \item Nếu vector của token mới $\mathbf{e}_{\text{new}}$ được khởi tạo ngẫu nhiên theo phân phối chuẩn $\mathcal{N}(\mathbf{0}, \sigma_{\text{init}}^2 \mathbf{I}_d)$ với $\sigma_{\text{init}} \gg \sigma_{\text{pre}}$ (ví dụ $\sigma_{\text{init}} = 1$), thì với vector ẩn tầng cuối $\mathbf{h}_t \in \mathbb{R}^d$, phương sai của logit mới $z_{\text{new}} = \mathbf{h}_t^\top \mathbf{e}_{\text{new}}$ là $\Var(z_{\text{new}}) = \|\mathbf{h}_t\|_2^2 \sigma_{\text{init}}^2 \gg \Var(z_i)$. Khi $z_{\text{new}} > 0$ lớn, xác suất dự đoán cho token mới $P_\theta(x_t = \text{new} \mid x_{<t}) \to 1$, làm hàm mất mát và chuẩn đạo hàm truyền ngược về $\mathbf{h}_t$ bùng nổ.
+    \item Nếu khởi tạo $\mathbf{e}_{\text{new}}$ theo phân phối chuẩn có tâm tại vector trung bình cộng:
+    \begin{equation}
+        \mathbf{e}_{\text{new}} \sim \mathcal{N}\left( \bm{\mu},\; \frac{1}{|V|}\bm{\Sigma} \right) \quad \text{hoặc xấp xỉ tất định } \mathbf{e}_{\text{new}} = \frac{1}{|V|}\sum_{i=1}^{|V|} \mathbf{e}_i,
+        \label{eq:mean_embedding_init}
+    \end{equation}
+    thì tại bước khởi đầu của SFT, logit của token mới bằng đúng trung bình cộng logit của các token hiện có: $z_{\text{new}} = \mathbf{h}_t^\top \bm{\mu} = \frac{1}{|V|}\sum_{i=1}^{|V|} z_i$, đảm bảo xác suất tiên nghiệm của token mới có bậc độ lớn $\mathcal{O}\big(\frac{1}{|V|}\big)$ êm ái và bảo toàn phân phối gốc trên các token cũ.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+Xét tầng chiếu đầu ra tại bước thời gian $t$ với vector trạng thái ẩn $\mathbf{h}_t \in \mathbb{R}^d$. Với mỗi token $i \in \{1, \dots, |V|\}$, giá trị logit tương ứng là $z_i = \mathbf{h}_t^\top \mathbf{e}_i$.
+Khi khởi tạo $\mathbf{e}_{\text{new}} = \bm{\mu} = \frac{1}{|V|}\sum_{i=1}^{|V|} \mathbf{e}_i$, do tính tuyến tính của tích vô hướng, giá trị logit dành cho token mới là:
+\begin{equation}
+    z_{\text{new}} = \mathbf{h}_t^\top \mathbf{e}_{\text{new}} = \mathbf{h}_t^\top \left( \frac{1}{|V|}\sum_{i=1}^{|V|} \mathbf{e}_i \right) = \frac{1}{|V|}\sum_{i=1}^{|V|} (\mathbf{h}_t^\top \mathbf{e}_i) = \bar{z}.
+\end{equation}
+Khi đó, với bất kỳ cặp token cũ $i, j \in \{1, \dots, |V|\}$ nào, tỷ số xác suất tương đối giữa chúng sau khi thêm $K$ token mới vẫn được bảo toàn tuyệt đối:
+\begin{equation}
+    \frac{P_\theta^{\text{expanded}}(x_t = i \mid x_{<t})}{P_\theta^{\text{expanded}}(x_t = j \mid x_{<t})} = \frac{\exp(z_i) / \big(\sum_{v=1}^{|V|} e^{z_v} + K e^{\bar{z}}\big)}{\exp(z_j) / \big(\sum_{v=1}^{|V|} e^{z_v} + K e^{\bar{z}}\big)} = \frac{\exp(z_i)}{\exp(z_j)} = \frac{P_\theta^{\text{orig}}(x_t = i \mid x_{<t})}{P_\theta^{\text{orig}}(x_t = j \mid x_{<t})}.
+\end{equation}
+Ngược lại, nếu $\mathbf{e}_{\text{new}} \sim \mathcal{N}(\mathbf{0}, \sigma_{\text{init}}^2 \mathbf{I}_d)$ với $\sigma_{\text{init}} \gg \sigma_{\text{pre}}$, do $\Var(z_{\text{new}} \mid \mathbf{h}_t) = \|\mathbf{h}_t\|_2^2 \sigma_{\text{init}}^2$, với xác suất $1/2$ biến chuẩn $z_{\text{new}}$ nhận giá trị dương cực lớn $z_{\text{new}} \gg \max_{i \in V} z_i$. Khi đó $\exp(z_{\text{new}})$ thống trị mẫu số của hàm Softmax, làm $P_\theta(\text{new} \mid x_{<t}) \approx 1$. Tại mọi vị trí $t$ mà nhãn thực tế là một từ thông thường $x_t^* \in V$, đạo hàm của hàm mất mát Cross-Entropy $\ell_t = -\log P_\theta(x_t^* \mid x_{<t})$ theo vector ẩn $\mathbf{h}_t$ là:
+\begin{equation}
+    \frac{\partial \ell_t}{\partial \mathbf{h}_t} = \sum_{v \in V \cup \{\text{new}\}} P_\theta(v \mid x_{<t})\mathbf{e}_v - \mathbf{e}_{x_t^*} \approx \mathbf{e}_{\text{new}} - \mathbf{e}_{x_t^*},
+\end{equation}
+có chuẩn Euclid $\|\frac{\partial \ell_t}{\partial \mathbf{h}_t}\|_2 \approx \|\mathbf{e}_{\text{new}}\|_2 \approx \sqrt{d}\,\sigma_{\text{init}}$, lớn gấp $\frac{\sigma_{\text{init}}}{\sigma_{\text{pre}}}$ lần (hàng chục lần) so với đạo hàm chuẩn của mô hình, gây ra hiện tượng quên thảm khốc (\textit{Catastrophic Forgetting}) trên toàn bộ các tầng Transformer phía dưới ngay trong những bước cập nhật đầu tiên.
+\end{proof}
+
+% ============================================================================
+\section{Cơ chế Mặt nạ Mất mát (Prompt Masking / Loss Masking)}
+\label{sec:prompt_masking}
+
+Sau khi tuần tự hóa cuộc hội thoại thành một chuỗi token duy nhất $\mathbf{x} = (x_1, x_2, \dots, x_T)$, bước tiếp theo là định nghĩa hàm mục tiêu huấn luyện của SFT.
+Nếu áp dụng nguyên xi hàm mất mát Pre-training ở Phương trình~\eqref{eq:pretrain_loss}, mô hình sẽ tính Cross-Entropy trên mọi vị trí $t \in \{1, \dots, T\}$. Tuy nhiên, trong một mẫu hội thoại $\mathbf{x} = (x_{\text{prompt}}, y_{\text{response}})$, phần đầu vào $x_{\text{prompt}}$ (bao gồm chỉ dẫn của `system` và câu hỏi của `user`) là dữ liệu cho trước bởi môi trường bên ngoài; nhiệm vụ của trợ lý AI chỉ là sinh ra phần phản hồi $y_{\text{response}}$.
+
+\begin{definition}[Hàm Mất mát SFT với Mặt nạ Nhị phân]
+\label{def:sft_loss_mask}
+Với chuỗi hội thoại $\mathbf{x} = (x_1, x_2, \dots, x_T)$, ta định nghĩa dãy \textbf{Mặt nạ Mất mát (Loss Mask)} $\mathbf{m} = (m_1, m_2, \dots, m_T) \in \{0, 1\}^T$ theo quy tắc:
+\begin{equation}
+    m_t = \begin{cases}
+        1 & \text{nếu token } x_t \text{ thuộc nội dung phản hồi của \texttt{assistant} (kể cả token kết thúc } \langle|\text{im\_end}|\rangle\text{)}, \\
+        0 & \text{nếu token } x_t \text{ thuộc \texttt{system}, \texttt{user}, hoặc thẻ mở đầu } \langle|\text{im\_start}|\rangle\text{\texttt{assistant}}.
+    \end{cases}
+    \label{eq:mask_definition}
+\end{equation}
+Khi đó, hàm mất mát Tinh chỉnh có Giám sát $\mathcal{L}_{\text{SFT}}(\theta)$ được định nghĩa là trung bình có trọng số mặt nạ của Negative Log-Likelihood:
+\begin{equation}
+    \mathcal{L}_{\text{SFT}}(\theta) = -\frac{1}{\sum_{t=1}^{T} m_t} \sum_{t=1}^{T} m_t \cdot \log \pi_\theta(x_t \mid x_1, \dots, x_{t-1}).
+    \label{eq:sft_masked_loss}
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Sự chuyển đổi từ Xác suất Đồng thời sang Xác suất Có điều kiện qua Mặt nạ Mất mát]
+Xét một cuộc hội thoại đơn lượt gồm câu hỏi $x = (x_1, \dots, x_M)$ và câu trả lời $y = (y_1, \dots, y_N)$ được nối thành chuỗi $\mathbf{z} = (x_1, \dots, x_M, y_1, \dots, y_N)$ có tổng độ dài $T = M + N$. Với mặt nạ $m_t = 0$ cho $1 \le t \le M$ và $m_t = 1$ cho $M+1 \le t \le M+N$, tổng mất mát trong Phương trình~\eqref{eq:sft_masked_loss} chính là Negative Log-Likelihood có điều kiện $-\log \pi_\theta(y \mid x)$:
+\begin{equation}
+    -\sum_{t=1}^{M+N} m_t \log \pi_\theta(z_t \mid z_{<t}) = -\sum_{k=1}^{N} \log \pi_\theta(y_k \mid x, y_{<k}) = -\log \pi_\theta(y \mid x).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Theo quy tắc Bayes cho chuỗi $\mathbf{z} = (x, y)$, logarit xác suất đồng thời là:
+\begin{equation}
+    \log \pi_\theta(x, y) = \log \pi_\theta(x) + \log \pi_\theta(y \mid x) = \sum_{t=1}^{M} \log \pi_\theta(x_t \mid x_{<t}) + \sum_{k=1}^{N} \log \pi_\theta(y_k \mid x, y_{<k}).
+\end{equation}
+Khi nhân từng hạng tử với $m_t$ theo định nghĩa ($m_t = 0$ với $t \le M$ và $m_t = 1$ với $t > M$), tổng đầu tiên $\sum_{t=1}^{M} 0 \cdot \log \pi_\theta(x_t \mid x_{<t})$ bị triệt tiêu hoàn toàn, chỉ còn lại đúng $-\log \pi_\theta(y \mid x)$.
+\end{proof}
+
+\subsection{Hai Hệ quả Sống còn của Mặt nạ Mất mát trong SFT}
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Bất đối xứng giữa Lan truyền Xuôi (Attention) và Lan truyền Ngược (Loss):}
+    Mặc dù $m_t = 0$ tại các vị trí thuộc câu hỏi $x$ khiến các vị trí này không sinh ra đạo hàm trực tiếp ở hàm mất mát, nhưng trong pha lan truyền xuôi qua các tầng Self-Attention, các token thuộc câu trả lời $y$ vẫn chú ý (\textit{attend}) đầy đủ vào các vector Key và Value của câu hỏi $x$. Do đó, đạo hàm từ $\log \pi_\theta(y_k \mid x, y_{<k})$ vẫn truyền ngược qua các ma trận $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V$ tại các vị trí của $x$, giúp mô hình học cách trích xuất thông tin từ câu hỏi để phục vụ cho câu trả lời!
+    \item \textbf{Toán học của Điểm dừng Tự hồi quy (Stopping Criterion tại $\langle|\text{im\_end}|\rangle$):}
+    Quá trình mô hình sinh câu trả lời $y = (y_1, \dots, y_N)$ chỉ kết thúc tại bước $N$ khi và chỉ khi mô hình chọn hành động xuất ra token kết thúc lượt $y_N = \langle|\text{im\_end}|\rangle$. Xác suất để mô hình sinh một câu trả lời có độ dài hữu hạn đúng bằng $N$ là:
+    \begin{equation}
+        P(\text{Stop at } N \mid x, y_{<N}) = \pi_\theta\big(y_N = \langle|\text{im\_end}|\rangle \;\big|\; x, y_1, \dots, y_{N-1}\big) \cdot \prod_{k=1}^{N-1} \Big(1 - \pi_\theta\big(\langle|\text{im\_end}|\rangle \mid x, y_{<k}\big)\Big).
+    \end{equation}
+    Nếu người thiết kế vô tình gán $m_N = 0$ tại vị trí token $\langle|\text{im\_end}|\rangle$ của Assistant, không có bất kỳ lực đạo hàm nào kéo $\pi_\theta(\langle|\text{im\_end}|\rangle \mid x, y_{<N})$ tăng lên khi câu trả lời đã hoàn chỉnh. Hệ quả là xác suất dừng luôn gần bằng $0$, khiến mô hình sinh chữ bất tận cho đến khi tràn bộ nhớ ngữ cảnh. Ngược lại, tại vị trí $\langle|\text{im\_end}|\rangle$ ở cuối câu hỏi của User, ta bắt buộc phải gán $m_t = 0$ vì người quyết định kết thúc câu hỏi là User chứ không phải Assistant.
+\end{enumerate}
+
+% ============================================================================
+\section{Đóng gói Chuỗi (Sequence Packing), Mặt nạ Đường chéo Khối \& Đặt lại Vị trí RoPE}
+\label{sec:sequence_packing}
+
+Trong thực tế huấn luyện trên phần cứng xử lý ma trận song song, mỗi lô dữ liệu (\textit{Batch}) là một tensor chữ nhật kích thước $B \times L_{\max}$ (với $L_{\max}$ là độ dài ngữ cảnh tối đa, ví dụ $8,192$ tokens). Trong tập dữ liệu SFT, độ dài $L_k$ của từng cuộc hội thoại biến thiên rất lớn ($50 \le L_k \le 8,192$).
+
+Nếu áp dụng phương pháp \textbf{Chèn đệm (Padding)} (điền các token rỗng $\langle\text{pad}\rangle$ vào cuối các câu ngắn cho đủ độ dài của câu dài nhất trong lô), tỷ lệ tính toán hữu ích (\textit{Effective Token Ratio}) chỉ đạt:
+\begin{equation}
+    \eta_{\text{pad}} = \frac{\sum_{b=1}^{B} L_b}{B \cdot \max_{1 \le b \le B} L_b} \ll 1 \quad (\text{thường chỉ đạt } 15\% \text{ đến } 30\%).
+\end{equation}
+Do bậc độ phức tạp tính toán của tầng Self-Attention tỷ lệ bậc hai $\mathcal{O}(B \cdot L_{\max}^2 \cdot d)$, việc nhân ma trận trên $70\% - 85\%$ các token $\langle\text{pad}\rangle$ gây lãng phí tài nguyên phần cứng nghiêm trọng.
+
+Để đạt hiệu suất $\eta_{\text{pack}} \approx 100\%$, kỹ thuật \textbf{Đóng gói Chuỗi (Sequence Packing)} ghép nối trực tiếp $K$ cuộc hội thoại độc lập $\mathbf{z}^{(1)}, \mathbf{z}^{(2)}, \dots, \mathbf{z}^{(K)}$ (có độ dài tương ứng $L_1, L_2, \dots, L_K$ sao cho $\sum_{k=1}^{K} L_k \le L_{\max}$) nằm liên tiếp nhau trên cùng một hàng dữ liệu:
+\begin{equation}
+    \mathbf{Z}_{\text{packed}} = \big( \underbrace{z^{(1)}_1, \dots, z^{(1)}_{L_1}}_{\text{Hội thoại } 1 \text{ (Độ dài } L_1\text{)}},\; \underbrace{z^{(2)}_1, \dots, z^{(2)}_{L_2}}_{\text{Hội thoại } 2 \text{ (Độ dài } L_2\text{)}},\; \dots,\; \underbrace{z^{(K)}_1, \dots, z^{(K)}_{L_K}}_{\text{Hội thoại } K \text{ (Độ dài } L_K\text{)}} \big).
+\end{equation}
+
+Tuy nhiên, để chuỗi đóng gói $\mathbf{Z}_{\text{packed}}$ cho ra kết quả toán học \textbf{trùng khít 100\%} với việc chạy riêng lẻ từng cuộc hội thoại, hai điều kiện bất biến về Mặt nạ Chú ý và Mã hóa Vị trí bắt buộc phải được thỏa mãn:
+
+\subsection{Điều kiện 1: Mặt nạ Nhân quả Đường chéo Khối (Block-Diagonal Causal Attention Mask)}
+Gọi $s_k = \sum_{r=1}^{k-1} L_r$ là chỉ số bắt đầu và $e_k = \sum_{r=1}^{k} L_r$ là chỉ số kết thúc của cuộc hội thoại thứ $k$ trong chuỗi đóng gói (với $s_1 = 0$). Với mọi vị trí toàn cục $i \in \{1, \dots, L_{\text{total}}\}$, ký hiệu $c(i) \in \{1, \dots, K\}$ là chỉ số của cuộc hội thoại chứa token thứ $i$ (tức $s_{c(i)} < i \le e_{c(i)}$).
+
+Trong Pre-training tiêu chuẩn, mặt nạ nhân quả $M^{\text{causal}} \in \{0, -\infty\}^{L \times L}$ chỉ kiểm tra điều kiện $i \ge j$. Nếu dùng $M^{\text{causal}}$ cho $\mathbf{Z}_{\text{packed}}$, một token ở vị trí $i$ thuộc Hội thoại 2 ($c(i) = 2$) sẽ có $i > j$ với mọi vị trí $j$ thuộc Hội thoại 1 ($c(j) = 1$), dẫn đến \textbf{Rò rỉ Ngữ cảnh (Cross-Document Contamination)}.
+
+Để triệt tiêu hoàn toàn sự giao thoa giữa các hội thoại khác nhau, ta định nghĩa \textbf{Mặt nạ Nhân quả Đường chéo Khối} $\mathbf{M}^{\text{block}} \in \{0, -\infty\}^{L_{\max} \times L_{\max}}$:
+\begin{equation}
+    M^{\text{block}}_{i, j} = \begin{cases}
+        0 & \text{nếu } i \ge j \text{ \textbf{VÀ} } c(i) = c(j) \quad (\text{cùng thuộc một cuộc hội thoại}), \\
+        -\infty & \text{nếu } i < j \text{ \textbf{HOẶC} } c(i) \neq c(j).
+    \end{cases}
+    \label{eq:block_diagonal_mask}
+\end{equation}
+Khi đưa vào công thức Self-Attention $\mathbf{A} = \Softmax\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}} + \mathbf{M}^{\text{block}}\right)$, với mọi cặp vị trí $(i, j)$ khác cuộc hội thoại ($c(i) \neq c(j)$), trọng số chú ý trở thành:
+\begin{equation}
+    A_{i, j} = \frac{\exp\big(\frac{\mathbf{q}_i^\top \mathbf{k}_j}{\sqrt{d_k}} - \infty\big)}{\sum_{r=1}^{L_{\max}} \exp\big(\frac{\mathbf{q}_i^\top \mathbf{k}_r}{\sqrt{d_k}} + M^{\text{block}}_{i, r}\big)} = 0.
+\end{equation}
+Như vậy, ma trận trọng số chú ý $\mathbf{A}$ có dạng đường chéo khối:
+\begin{equation}
+    \mathbf{A} = \diag\big(\mathbf{A}^{(1)}, \mathbf{A}^{(2)}, \dots, \mathbf{A}^{(K)}\big) = \begin{pmatrix}
+        \mathbf{A}^{(1)}_{L_1 \times L_1} & \mathbf{0} & \cdots & \mathbf{0} \\
+        \mathbf{0} & \mathbf{A}^{(2)}_{L_2 \times L_2} & \cdots & \mathbf{0} \\
+        \vdots & \vdots & \ddots & \vdots \\
+        \mathbf{0} & \mathbf{0} & \cdots & \mathbf{A}^{(K)}_{L_K \times L_K}
+    \end{pmatrix},
+\end{equation}
+trong đó mỗi khối con $\mathbf{A}^{(k)} \in \mathbb{R}^{L_k \times L_k}$ là một ma trận tam giác dưới độc lập hoàn toàn.
+
+\subsection{Điều kiện 2: Đặt lại Chỉ số Vị trí cho Mã hóa Vị trí Quay (RoPE Position Reset)}
+Các mô hình ngôn ngữ hiện đại sử dụng \textbf{Mã hóa Vị trí Quay (Rotary Position Embedding -- RoPE)} \citep{su2024roformer}. Trong RoPE, với một vector Query hoặc Key $\mathbf{u} \in \mathbb{R}^d$ tại vị trí tương đối $p \in \{0, 1, 2, \dots\}$, không gian $\mathbb{R}^d$ được chia thành $d/2$ mặt phẳng hai chiều trực giao; trên mặt phẳng thứ $m \in \{1, \dots, d/2\}$, cặp tọa độ $(u_{2m-1}, u_{2m})$ được quay một góc $p \cdot \theta_m$ (với tần số góc $\theta_m = 10000^{-2(m-1)/d}$) thông qua ma trận quay khối $\mathbf{R}_{\Theta, p}^d \in \mathbb{R}^{d \times d}$:
+\begin{equation}
+    \mathbf{R}_{\Theta, p}^d = \diag\big(\mathbf{R}_1(p), \mathbf{R}_2(p), \dots, \mathbf{R}_{d/2}(p)\big), \quad \text{với } \mathbf{R}_m(p) = \begin{pmatrix}
+        \cos(p\theta_m) & -\sin(p\theta_m) \\
+        \sin(p\theta_m) & \cos(p\theta_m)
+    \end{pmatrix}.
+    \label{eq:rope_matrix}
+\end{equation}
+Điểm chú ý giữa vị trí $i$ (mang chỉ số vị trí $p_i$) và vị trí $j$ (mang chỉ số vị trí $p_j$) là:
+\begin{equation}
+    \big(\mathbf{R}_{\Theta, p_i}^d \mathbf{q}_i\big)^\top \big(\mathbf{R}_{\Theta, p_j}^d \mathbf{k}_j\big) = \mathbf{q}_i^\top \big(\mathbf{R}_{\Theta, p_i}^d\big)^\top \mathbf{R}_{\Theta, p_j}^d \mathbf{k}_j = \mathbf{q}_i^\top \mathbf{R}_{\Theta, p_j - p_i}^d \mathbf{k}_j.
+\end{equation}
+Mặc dù điểm chú ý giữa hai token trong cùng một hội thoại chỉ phụ thuộc vào khoảng cách tương đối $p_j - p_i$, nhưng trong thực tế các mô hình còn áp dụng bộ nhớ đệm hoặc có sự nhạy cảm với khoảng giá trị tuyệt đối của $p_i$ trong các phép làm trơn ngoại suy ngữ cảnh (như YaRN / RoPE Scaling trong Llama 3 \citealt{dubey2024llama}). Do đó, đối với mọi vị trí toàn cục $i$ thuộc cuộc hội thoại thứ $k$ ($s_k < i \le e_k$), chỉ số vị trí $p_i$ truyền vào ma trận quay RoPE bắt buộc phải được \textbf{đặt lại (reset) về $0$} tại điểm bắt đầu của mỗi cuộc hội thoại:
+\begin{equation}
+    p_i = i - s_{c(i)} - 1 \in \{0, 1, \dots, L_{c(i)} - 1\}.
+\end{equation}
+
+% ============================================================================
+\section{Quy luật Dữ liệu trong SFT: Giả thuyết LIMA vs. Quy mô Công nghiệp Hiện đại}
+\label{sec:lima_vs_scaling}
+
+Câu hỏi chiến lược đặt ra khi thiết kế giai đoạn SFT là: \textit{``Cần bao nhiêu mẫu dữ liệu $(x, y^*)$ để căn chỉnh thành công một mô hình nền tảng?''}
+
+\subsection{Giả thuyết Căn chỉnh Bề mặt (Superficial Alignment Hypothesis -- LIMA \citep{zhou2023lima})}
+Trong công trình \textbf{LIMA (\textit{Less Is More for Alignment})}, \citet{zhou2023lima} đã phát biểu và kiểm chứng \textbf{Giả thuyết Căn chỉnh Bề mặt}:
+\begin{quote}
+\textit{``Tri thức và năng lực của một mô hình ngôn ngữ được học gần như hoàn toàn trong giai đoạn Pre-training. Quá trình căn chỉnh (Alignment) chỉ đơn thuần dạy mô hình nên chọn định dạng con (subdistribution of formats) nào để giao tiếp với người dùng.''}
+\end{quote}
+Chỉ với đúng \textbf{1,000 mẫu hội thoại} được biên tập thủ công với chất lượng văn phong đồng nhất và độ đa dạng câu hỏi cao (không sử dụng bất kỳ bước RLHF nào), mô hình LIMA-65B đã đạt tỷ lệ thắng ngang ngửa hoặc vượt qua GPT-4 (phiên bản đầu năm 2023) trong $43\%$ các câu hỏi mở do con người đánh giá, vượt xa mô hình Alpaca-65B được huấn luyện trên $52,000$ mẫu dữ liệu chất lượng thấp. Bài học cốt lõi từ LIMA là trong SFT, \textbf{chất lượng và độ sạch của phân phối mẫu $y^*$ quan trọng hơn số lượng thô gấp nhiều lần}.
+
+\subsection{Sự Mở rộng Quy mô SFT trong Thực tế Công nghiệp Hiện đại \citep{dubey2024llama, lambert2024tulu}}
+Tuy nhiên, các nghiên cứu quy mô lớn sau đó như \textbf{FLAN} \citep{wei2021finetuned}, \textbf{Llama 3} \citep{dubey2024llama} và \textbf{Tülu 3} \citep{lambert2024tulu} đã chứng minh rằng: 1,000 mẫu của LIMA chỉ đủ cho các cuộc trò chuyện văn bản mở thông thường. Khi yêu cầu mô hình giải quyết các tác vụ đa kỹ năng khắt khe (giải toán Olympic nhiều bước, viết mã nguồn đa ngôn ngữ, gọi công cụ \textit{Function Calling}, tuân thủ ràng buộc định dạng chính xác và xử lý ngữ cảnh dài), tập dữ liệu SFT hiện đại cần từ \textbf{100,000 đến hơn 1,000,000 mẫu chất lượng cao}.
+
+Để tạo ra hàng trăm nghìn mẫu SFT mà vẫn giữ được chất lượng tương đương chuyên gia như LIMA, quy trình công nghiệp hiện đại sử dụng kỹ thuật \textbf{Lấy mẫu Bác bỏ kết hợp Chắt lọc Tổng hợp (Rejection Sampling \& Synthetic Distillation)} \citep{dubey2024llama}:
+\begin{enumerate}[leftmargin=1.2cm]
+    \item Với mỗi câu hỏi phức tạp $x$ thu thập từ thực tế, dùng mô hình mạnh nhất hiện có sinh ra $N$ ứng viên trả lời độc lập $\{y^{(1)}, y^{(2)}, \dots, y^{(N)}\} \sim \pi_{\text{Teacher}}(\cdot \mid x)$ ở nhiệt độ lấy mẫu cao (ví dụ $N \in [16, 64]$).
+    \item Sử dụng các bộ kiểm tra tự động (như trình biên dịch mã nguồn, bộ giải toán học) kết hợp với Mô hình Phần thưởng (\textit{Reward Model}) để chấm điểm và lọc bỏ toàn bộ các ứng viên sai hoặc trình bày kém, chỉ giữ lại ứng viên đạt điểm tuyệt đối $y^* = \argmax_{y^{(k)}} r(x, y^{(k)})$ đưa vào tập huấn luyện SFT.
+\end{enumerate}

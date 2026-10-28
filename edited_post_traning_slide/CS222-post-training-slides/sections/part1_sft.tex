@@ -1,0 +1,233 @@
+% ============================================================================
+% PHẦN 1 (2020 - 2021): TỪ Pre-training ĐẾN Supervised Fine-Tuning (SFT)
+% ============================================================================
+\sectionintro{1}{Supervised Fine-Tuning (SFT)}{2020--2021}{Base Model, mục tiêu chỉ thị, dữ liệu và SFT Loss.}
+
+\subsection{Pre-trained Language Model}
+
+% ----------------------------------------------------------------------------
+% SLIDE: MÔ HÌNH Pre-training (GPT-3, 2020)
+% ----------------------------------------------------------------------------
+\begin{frame}{Pre-trained Language Model}
+  \lead{Mục tiêu dự đoán token tiếp theo của Base Model.}
+  \begin{block}{Mục tiêu dự đoán token tiếp theo}
+    \[
+      \mathcal{L}_{\text{Pretrain}}(\theta) = -\sum_{t=1}^{T} \log P_\theta(u_t \mid u_1, u_2, \dots, u_{t-1})
+    \]
+  \end{block}
+
+  \subhead{Base Model học được gì?}
+  \small
+  \begin{itemize}\setlength{\itemsep}{4pt}
+    \item \textbf{Xấp xỉ phân phối biên ngôn ngữ:} Học phân phối có điều kiện $P_\theta(u_t \mid u_{<t})$.
+    \item \textbf{Nội hóa tri thức thế giới:} Nén cú pháp, tri thức sự kiện (factual knowledge) và quy luật suy diễn.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: GIỚI HẠN CỦA PRE-TRAINING
+% ----------------------------------------------------------------------------
+\begin{frame}{Giới hạn của Pre-training}
+  \lead{Dự đoán văn bản và giải quyết yêu cầu là hai mục tiêu khác nhau.}
+  \small
+  \begin{itemize}\setlength{\itemsep}{4pt}
+    \item \textbf{Objective Mismatch:}
+      \begin{itemize}\small\setlength{\itemsep}{3pt}
+        \item Đầu vào $x$: \textit{``Giải thích nguyên lý của laser?''}
+        \item Đầu ra Base Model: Sinh tiếp các câu hỏi số 2, số 3 thay vì trả lời.
+      \end{itemize}
+    \item \textbf{Không phân biệt chất lượng dữ liệu:}
+      \begin{itemize}\small\setlength{\itemsep}{3pt}
+        \item Tái tạo cả sai số thực tế, định kiến và nội dung độc hại từ tập dữ liệu web.
+      \end{itemize}
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: MỤC TIÊU CỦA POST-TRAINING
+% ----------------------------------------------------------------------------
+\begin{frame}{Mục tiêu của Post-training}
+  \small
+  \textbf{Định hướng phân phối phản hồi:} Chuyển dịch từ $P_\theta(u_t \mid u_{<t})$ sang phân phối phản hồi theo chỉ thị $\pi_\theta(y \mid x)$.
+  
+  \vspace{0.5cm}
+
+  \textbf{Ba tiêu chuẩn căn chỉnh (3H Criteria):}
+      \begin{enumerate}\small\setlength{\itemsep}{3pt}
+        \item \textbf{Helpful (Hữu ích):} Giải quyết đúng yêu cầu.
+        \item \textbf{Honest (Trung thực):} Hạn chế bịa đặt thông tin.
+        \item \textbf{Harmless (Vô hại):} Từ chối tác vụ độc hại.
+      \end{enumerate}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: BIÊN NIÊN SỬ TIẾN HÓA POST-TRAINING 2020 - 2026 (TOÀN TRANG)
+% ----------------------------------------------------------------------------
+\subsection{1.2. Instruction Fine-Tuning (SFT -- Giai đoạn 2021--2022)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SUPERVISED FINE-TUNING (SFT) & KHUÔN MẪU HỘI THOẠI
+% ----------------------------------------------------------------------------
+\begin{frame}{Dữ liệu SFT và khuôn mẫu hội thoại}
+  \lead{SFT học bắt chước phản hồi của chuyên gia (Wei et al., 2022).}
+  \subhead{Dữ liệu và Control Tokens}
+  \small
+  \begin{itemize}\setlength{\itemsep}{4pt}
+    \item \textbf{Tập dữ liệu:} $\mathcal{D}_{\text{SFT}} = \{(x^{(i)}, y^{*(i)})\}_{i=1}^{N}$ gồm truy vấn đầu vào $x$ và mẫu phản hồi chuẩn $y^*$.
+    \item \textbf{Phân vùng ngữ cảnh bằng Control Tokens:}
+      \begin{itemize}\small\setlength{\itemsep}{3pt}
+        \item \texttt{<|im\_start|>system ... <|im\_end|>} $\longrightarrow$ Ràng buộc hệ thống toàn cục.
+        \item \texttt{<|im\_start|>user ... <|im\_end|>} $\longrightarrow$ Miền truy vấn đầu vào $x$.
+        \item \texttt{<|im\_start|>assistant ... <|im\_end|>} $\longrightarrow$ Miền sinh phản hồi mục tiêu $y^*$.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ LUỒNG DỮ LIỆU HUẤN LUYỆN SFT & PROMPT MASKING
+% ----------------------------------------------------------------------------
+\begin{frame}{SFT: luồng dữ liệu và Loss Masking}
+  \vspace{0.15cm}
+  \begin{figure}
+    \centering
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[data, text width=3.6cm, fill=gray!18, draw=slate] (prompt) at (0, 1.0) {
+          \textbf{Truy vấn đầu vào $x$}\\
+          $\mathbf{m_t = 0}$
+        };
+        \node[data, text width=3.6cm, fill=softgreen, draw=tealgreen] (resp) at (0, -1.0) {
+          \textbf{Mẫu phản hồi chuẩn $y^*$}\\
+          $\mathbf{m_t = 1}$
+        };
+
+        \node[trainmodel, text width=3.4cm, minimum height=2.6cm] (llm) at (4.7, 0) {
+          \textbf{Policy Model $\pi_\theta$}\\
+        };
+
+        \node[rewardbox, text width=3.3cm, minimum height=1.5cm] (prob) at (9.2, 0) {
+          \textbf{Phân phối xác suất}\\
+          $\pi_\theta(y_t^* \mid x, y_{<t}^*)$\\[3pt]
+          (Tại các vị trí $m_t = 1$)
+        };
+
+        \node[lossbox, text width=3.3cm, minimum height=1.5cm] (loss) at (13.6, 0) {
+          \textbf{SFT Loss}\\
+          $\mathcal{L}_{\text{SFT}}(\theta)$\\[3pt]
+        };
+
+        \draw[flow] (prompt.east) -- (llm.west |- prompt.east);
+        \draw[flow] (resp.east) -- (llm.west |- resp.east);
+        \draw[flow] (llm.east) -- (prob.west);
+        \draw[flow] (prob.east) -- (loss.west);
+
+        \coordinate (grad_start) at (13.6, -2.05);
+        \coordinate (grad_end) at (4.7, -2.05);
+        \draw[gradflow] (loss.south) -- (grad_start) -- node[below, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Backpropagation $\nabla_\theta \mathcal{L}_{\text{SFT}}$ cập nhật tham số $\theta$} (grad_end) -- (llm.south);
+      \end{tikzpicture}%
+    }
+    \setbeamertemplate{caption}{\insertcaption}
+    \caption{Quy trình huấn luyện SFT với Loss Masking.}
+  \end{figure}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: CÔNG THỨC TOÁN HỌC CỦA SFT & TẠI SAO CHỈ TÍNH LỖI TRÊN y*
+% ----------------------------------------------------------------------------
+\begin{frame}{SFT Loss}
+  \lead{Conditional Maximum Likelihood Estimation (MLE).}
+  \begin{block}{SFT Loss (Conditional MLE)}
+    \[
+      \mathcal{L}_{\text{SFT}}(\theta) = -\E_{(x, y^*) \sim \mathcal{D}_{\text{SFT}}} \left[ \sum_{t=1}^{|y^*|} \log \pi_\theta\big(y_t^* \;\big|\; x, y_1^*, \dots, y_{t-1}^*\big) \right]
+    \]
+  \end{block}
+
+  \subhead{Ý nghĩa các ký hiệu trong công thức}
+    \small
+    \begin{itemize}
+      \item $\theta,\; \pi_\theta$: Tham số cần tối ưu và mô hình chính sách.
+      \item $\mathcal{D}_{\text{SFT}}$: Tập dữ liệu gồm các cặp prompt--phản hồi $(x, y^*)$.
+      \item $y_{<t}^*$: Ngữ cảnh tiền tố $y_1^*, \dots, y_{t-1}^*$.
+    \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: GIẢ THUYẾT LIMA (2023)
+% ----------------------------------------------------------------------------
+\begin{frame}{Chất lượng dữ liệu: Giả thuyết LIMA}
+  \lead{Zhou et al., 2023 -- Less Is More for Alignment (LIMA).}
+  \subhead{Superficial Alignment Hypothesis}
+  \small
+  \begin{itemize}\setlength{\itemsep}{8pt}
+    \item \textbf{Tri thức từ Pre-training:} Toàn bộ tri thức thế giới và năng lực suy luận đã được tiếp thu ở giai đoạn Pre-training.
+    \item \textbf{Bản chất của SFT:} SFT chỉ đóng vai trò học phong cách (style), định dạng hội thoại và phong thái trợ lý.
+    \item \textbf{Không tạo tri thức mới:} SFT không nạp thêm kiến thức mới mà chỉ kích hoạt tri thức sẵn có theo chỉ thị.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+\subsection{1.3. Tổng kết Phần 1 (SFT): Thành tựu \& Các Vấn đề Tồn đọng cho Phần 2}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ TEACHER FORCING VS AUTOREGRESSIVE
+% ----------------------------------------------------------------------------
+\begin{frame}{SFT: huấn luyện và suy diễn}
+  \lead{Teacher forcing dùng tiền tố chuẩn; Autoregressive Decoding dùng tiền tố tự sinh.}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[rewardbox, text width=3.2cm, minimum height=1.15cm] (tf_label) at (0, 1.05) {
+          \textbf{1. Khi Huấn luyện}\\(Teacher Forcing)
+        };
+        \node[data, text width=2.3cm, minimum height=1.0cm] (tf1) at (3.5, 1.05) {Token chuẩn $y_1^*$};
+        \node[data, text width=2.3cm, minimum height=1.0cm] (tf2) at (6.5, 1.05) {Token chuẩn $y_2^*$};
+        \node[data, text width=2.3cm, minimum height=1.0cm] (tf3) at (9.5, 1.05) {Token chuẩn $y_3^*$};
+        \node[rewardbox, text width=3.9cm, minimum height=1.15cm] (tf_res) at (13.5, 1.05) {
+          Tiền tố điều kiện luôn thuộc\\phân phối chuẩn $y_{<t}^* \sim P_{\text{data}}$
+        };
+
+        \draw[flow] (tf_label.east) -- (tf1.west);
+        \draw[flow] (tf1.east) -- (tf2.west);
+        \draw[flow] (tf2.east) -- (tf3.west);
+        \draw[flow] (tf3.east) -- (tf_res.west);
+
+        \node[lossbox, text width=3.2cm, minimum height=1.15cm] (ar_label) at (0, -1.05) {
+          \textbf{2. Khi Suy diễn}\\(Autoregressive Rollout)
+        };
+        \node[data, text width=2.3cm, minimum height=1.0cm] (ar1) at (3.5, -1.05) {Tự sinh $\hat{y}_1$};
+        \node[lossbox, text width=2.3cm, minimum height=1.0cm] (ar2) at (6.5, -1.05) {Sai lệch $\hat{y}_2$};
+        \node[lossbox, text width=2.3cm, minimum height=1.0cm] (ar3) at (9.5, -1.05) {Trượt quỹ đạo $\hat{y}_3$};
+        \node[lossbox, text width=3.9cm, minimum height=1.15cm] (ar_res) at (13.5, -1.05) {
+          Tích lũy sai số theo độ dài $T$:\\$P(\text{Quỹ đạo đúng}) = (1-\epsilon)^T \to 0$
+        };
+
+        \draw[flow] (ar_label.east) -- (ar1.west);
+        \draw[gradflow] (ar1.east) -- (ar2.west);
+        \draw[gradflow] (ar2.east) -- (ar3.west);
+        \draw[gradflow] (ar3.east) -- (ar_res.west);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.5cm}
+  Khi huấn luyện: $s_t = (x, y_{<t}^*) \sim P_{\text{data}}$. 
+  Khi suy diễn: $\hat{s}_t = (x, \hat{y}_{<t}) \sim \pi_\theta$. 
+
+  Với $\epsilon = 0.01$, $T = 200$, xác suất giữ đúng quỹ đạo giảm còn $(0.99)^{200} \approx 13.4\%$.
+  \par\vspace{0pt}
+\end{frame}
+
+\begin{frame}{Hạn chế của SFT}
+  \begin{enumerate}\setlength{\itemsep}{2pt}
+    \item \textbf{Exposure Bias:}\\
+      \small Mô hình chỉ quan sát tiền tố mẫu $y_{<t}^* \sim P_{\text{data}}$, chưa bao giờ được huấn luyện trên chuỗi tự sinh $\hat{y} \sim \pi_\theta$.
+    \item \textbf{Extrinsic Hallucination:}\\
+      \small Cực đại hóa $\log \pi_\theta(y^* \mid x)$ trên cả tri thức nằm ngoài Base Model khiến mô hình suy giảm hiệu chỉnh xác suất (Miscalibration) và sinh thông tin bịa đặt.
+    \item \textbf{Absence of Negative Samples:}\\
+      \small SFT chỉ gia tăng xác suất cho mẫu dương chuẩn $y^*$ ($\uparrow$), không có gradient phạt ($\downarrow$) đối với các mẫu âm sai lệch $y_l$.
+  \end{enumerate}
+\end{frame}

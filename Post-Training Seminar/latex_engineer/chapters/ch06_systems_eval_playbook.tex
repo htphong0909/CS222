@@ -1,0 +1,195 @@
+% =========================================================================
+% CHƯƠNG 6: TỐI ƯU HỆ THỐNG, ĐÁNH GIÁ MÔ HÌNH & PLAYBOOK GỠ LỖI THỰC CHIẾN
+% =========================================================================
+\chapter{Tối ưu Hệ thống, Đánh giá Mô hình và Playbook Gỡ lỗi Thực chiến}
+\label{ch:systems_eval}
+
+Một AI Engineer giỏi không chỉ hiểu công thức của SFT, DPO hay GRPO, mà còn phải biết tính nhẩm chính xác lượng bộ nhớ GPU (VRAM) trước khi bấm nút chạy, biết lựa chọn giữa LoRA và Full Fine-Tuning, biết thiết kế hệ thống chấm điểm không bị lừa bởi thiên kiến độ dài, và quan trọng nhất: khi nhìn vào đồ thị hàm mất mát bị nổ hoặc mô hình sinh ra toàn ký tự rác lúc 2 giờ sáng, phải chẩn đoán được ngay nguyên nhân gốc rễ.
+
+Chương cuối cùng này trang bị cho bạn toàn bộ bộ công cụ thực chiến đó.
+
+% =========================================================================
+\section{Toán học Tính nhẩm Bộ nhớ GPU (Back-of-the-Envelope VRAM Math)}
+\label{sec:vram_math}
+
+\subsection{Quy tắc \texorpdfstring{$16\Psi$}{16 Psi}: Tại sao Mô hình 7B lại ngốn hơn 112 GB VRAM khi Huấn luyện?}
+
+Một câu hỏi kinh điển của các kỹ sư mới vào nghề: \textit{``Mô hình 7 tỷ tham số ($\Psi = 7 \times 10^9$) lưu ở định dạng 16-bit (BF16, mỗi tham số tốn 2 bytes) chỉ nặng có $7 \times 2 = 14\text{ GB}$. Tại sao tôi cắm vào card RTX 4090 (24 GB) hay thậm chí A100 (80 GB) để chạy Full Fine-Tuning lại bị báo lỗi tràn bộ nhớ (Out-Of-Memory --- OOM) ngay lập tức?''}
+
+Câu trả lời nằm ở kiến trúc \textbf{Mixed-Precision AdamW} \citep{micikevicius2018mixed, loshchilov2019decoupled, rajbhandari2020zero}. Để huấn luyện ổn định mà không bị mất mát các bước cập nhật siêu nhỏ (Underflow), mỗi tham số của mô hình đòi hỏi GPU phải lưu trữ đồng thời \textbf{4 thành phần trạng thái tĩnh}:
+
+\begin{enumerate}
+  \item \textbf{Trọng số mô hình (Weights --- BF16):} $2\text{ bytes} \times \Psi$.
+  \item \textbf{Đạo hàm (Gradients --- BF16):} $2\text{ bytes} \times \Psi$.
+  \item \textbf{Bản sao Trọng số Chủ (FP32 Master Weights):} $4\text{ bytes} \times \Psi$.
+  (Tại sao phải có bản sao 32-bit này? Vì ở định dạng 16-bit BF16, khoảng cách nhỏ nhất giữa hai số liên tiếp quanh số $1.0$ là $\approx 0.0078$. Trong khi đó, bước cập nhật $\text{LR} \times g_t \approx 10^{-5} \times 0.1 = 10^{-6}$ nhỏ hơn hàng nghìn lần! Nếu cộng trực tiếp $1.0 + 10^{-6}$ ở BF16, máy tính sẽ làm tròn kết quả về đúng $1.0$ --- mô hình đứng im không học được gì cả! Do đó, bắt buộc phải cộng dồn trên một bản sao 32-bit FP32).
+  \item \textbf{Hai trạng thái lịch sử của bộ tối ưu hóa AdamW (Momentum $m_t$ và Variance $v_t$ --- FP32):} $(4 + 4)\text{ bytes} \times \Psi = 8\text{ bytes} \times \Psi$.
+\end{enumerate}
+
+Tổng cộng, chỉ riêng phần bộ nhớ tĩnh (chưa tính dữ liệu đầu vào!) đã tốn:
+\begin{equation}
+  M_{\text{static}} = (2 + 2 + 4 + 4 + 4) \times \Psi = \mathbf{16\Psi \text{ bytes}}
+  \label{eq:16psi_rule}
+\end{equation}
+Với mô hình $\Psi = 7\text{ tỷ tham số}$, $M_{\text{static}} = 16 \times 7 = \mathbf{112\text{ GB VRAM}}$! Để nhét vừa 112 GB này vào một cụm 4 card GPU 40GB, chúng ta phải dùng kỹ thuật \textbf{FSDP (Fully Sharded Data Parallel)} \citep{zhao2023pytorch} hoặc \textbf{DeepSpeed ZeRO-3} \citep{rajbhandari2020zero} để cắt nhỏ (shard) toàn bộ $16\Psi$ bytes này chia đều cho $N_{\text{GPU}}$ card (mỗi card chỉ còn giữ $\frac{112}{4} = 28\text{ GB}$).
+
+\subsection{``Sát thủ giấu mặt'' làm tràn VRAM: Ma trận Logits ở Đầu ra Từ vựng (LM Head)}
+
+Nhiều kỹ sư đã bật ZeRO-3, bật cả Gradient Checkpointing và chỉ chạy với Batch Size cực nhỏ ($B = 2$), nhưng khi nâng chiều dài chuỗi lên $T = 8{,}192$ tokens trên các mô hình đời mới (như Llama 3 hay Qwen 2.5), GPU vẫn nổ OOM ngay tại bước tính hàm mất mát cuối cùng! Thủ phạm là gì?
+
+\begin{mathdecode}[Tính nhẩm kích thước Ma trận Logits tại lớp LM Head]
+Các mô hình thế hệ 2024--2026 có bảng từ vựng $|\mathcal{V}|$ cực lớn để hỗ trợ đa ngôn ngữ và code (ví dụ Llama 3 có $|\mathcal{V}| = 128{,}256$; Qwen 2.5 có $|\mathcal{V}| = 152{,}064$).
+Ở lớp cuối cùng của mạng Transformer, để tính hàm mất mát Cross-Entropy (trong SFT) hoặc $\log \pi_\theta$ (trong DPO/GRPO), mô hình phải tạo ra tensor \texttt{logits} có kích thước $(B, T, |\mathcal{V}|)$ và ép kiểu lên FP32 (4 bytes) để tính hàm \texttt{log\_softmax} chính xác:
+\begin{itemize}
+  \item Với $B = 2$, $T = 8{,}192$, $|\mathcal{V}| = 128{,}256$:
+  \begin{equation*}
+    M_{\text{logits}} = 2 \times 8{,}192 \times 128{,}256 \times 4\text{ bytes} \approx \mathbf{8.4\text{ GB}}
+  \end{equation*}
+  \item Khi gọi \texttt{.backward()}, PyTorch tạo thêm một tensor đạo hàm có kích thước y hệt ($8.4\text{ GB}$ nữa).
+  \item $\implies$ Chỉ riêng 1 dòng tính hàm mất mát ở lớp cuối cùng đã ngốn đột ngột $\mathbf{16.8\text{ GB VRAM}}$ trên mỗi card GPU!
+\end{itemize}
+\textbf{Giải pháp kỹ thuật hiện đại (\texttt{Liger-Kernel} / Fused Linear Cross-Entropy):} Thay vì nhân ra toàn bộ ma trận khổng lồ $(B \times T, |\mathcal{V}|)$ cùng một lúc, kỹ thuật \textit{Fused Linear Cross-Entropy} cắt nhỏ chiều thời gian $T$ thành từng khúc nhỏ (ví dụ 512 tokens), tính \texttt{log\_softmax} và đạo hàm ngay trong bộ nhớ đệm SRAM của GPU rồi xóa ngay trước khi sang khúc tiếp theo. Nhờ đó, bộ nhớ đỉnh của lớp LM Head giảm từ $16.8\text{ GB}$ xuống chỉ còn dưới $\mathbf{200\text{ MB}}$!
+\end{mathdecode}
+
+% =========================================================================
+\section{Kiến trúc Hạ tầng RL Hiện đại (\texttt{HybridFlow} / \texttt{verl})}
+\label{sec:hybridflow_verl}
+
+Khi chạy các thuật toán Online RL như PPO hay GRPO (Chương~\ref{ch:rl_ppo} và Chương~\ref{ch:reasoning_rl}), mỗi vòng lặp huấn luyện đều bị chia thành hai pha có bản chất vật lý trái ngược hoàn toàn nhau:
+
+\begin{enumerate}
+  \item \textbf{Pha Sinh văn bản (Rollout / Autoregressive Decoding):} Mô hình sinh ra từng chữ một cho $G$ câu trả lời dài hàng nghìn tokens. Ở pha này, để sinh ra 1 token mới, GPU phải đọc toàn bộ hàng chục Gigabyte trọng số mô hình từ bộ nhớ HBM vào chip xử lý nhưng chỉ thực hiện vài phép cộng nhân vector nhỏ lẻ. Do đó, pha này bị \textbf{nghẽn cổ chai ở băng thông đọc bộ nhớ (Memory-Bandwidth Bound)}, chiếm tới $70\% - 80\%$ tổng thời gian chạy RL! Để chạy nhanh pha này, bắt buộc phải dùng các engine suy luận chuyên dụng như \textbf{vLLM} hoặc \textbf{SGLang} \citep{kwon2023efficient} với kiểu chia mô hình \textbf{Tensor Parallelism (TP)}.
+  \item \textbf{Pha Cập nhật Đạo hàm (Training / Forward \& Backward):} Toàn bộ $G$ câu trả lời đã có sẵn nên GPU nhân hai ma trận khổng lồ cùng lúc. Pha này bị \textbf{nghẽn ở năng lực tính toán FLOPs (Compute Bound)} và cần kiểu chia bộ nhớ \textbf{FSDP / ZeRO} \citep{zhao2023pytorch, rajbhandari2020zero}.
+\end{enumerate}
+
+\begin{mentalmodel}[Cách thư viện \texttt{verl} (HybridFlow) giải cứu hạ tầng RL]
+Trước năm 2024, để kết hợp vLLM (cho pha Rollout) và FSDP (cho pha Training), các kỹ sư phải lưu trọng số ra ổ cứng hoặc truyền qua mạng TCP rất chậm chạp ở mỗi bước RL.
+Kiến trúc \textbf{HybridFlow (\texttt{verl})} \citep{sheng2024hybridflow} (được sử dụng rộng rãi để huấn luyện các mô hình Reasoning năm 2025--2026) đã giải quyết triệt để bằng cơ chế \textbf{3D-HybridEngine}:
+\begin{itemize}
+  \item Trong pha Training, trọng số nằm ở định dạng cắt nhỏ FSDP.
+  \item Ngay khi chuyển sang pha Rollout, \texttt{verl} thực hiện một phép gom nhóm trực tiếp trên đường truyền siêu tốc NVLink giữa các GPU (\texttt{All-Gather}) để biến đổi bố cục bộ nhớ từ FSDP sang đúng bố cục Tensor Parallelism của vLLM chỉ trong vài phần nghìn giây mà không chạm vào ổ cứng!
+  \item Sau khi vLLM sinh xong nhóm $G$ câu trả lời, bộ nhớ KV-Cache của vLLM lập tức được giải phóng để nhường chỗ cho các tensor đạo hàm của pha Training.
+\end{itemize}
+\end{mentalmodel}
+
+% =========================================================================
+\section{Phản biện Kỹ thuật: Khi nào dùng LoRA / QLoRA, Khi nào bắt buộc Full Fine-Tuning?}
+\label{sec:lora_vs_full}
+
+Khi ngân sách GPU hạn hẹp, \textbf{LoRA (Low-Rank Adaptation)} \citep{hu2022lora} và \textbf{QLoRA} \citep{dettmers2023qlora} là phao cứu sinh của mọi kỹ sư: thay vì cập nhật toàn bộ ma trận trọng số gốc $\mathbf{W}_0 \in \mathbb{R}^{d \times k}$, ta đóng băng $\mathbf{W}_0$ (thậm chí nén $\mathbf{W}_0$ xuống 4-bit NormalFloat4 trong QLoRA) và chỉ gắn thêm hai ma trận hạng thấp mỏng dính $\mathbf{A} \in \mathbb{R}^{r \times k}$ và $\mathbf{B} \in \mathbb{R}^{d \times r}$ với $r \ll \min(d, k)$ (thường chọn $r \in \{16, 32, 64\}$):
+\begin{equation}
+  \mathbf{W} = \mathbf{W}_0 + \frac{\alpha}{r} \mathbf{B}\mathbf{A}
+  \label{eq:lora_formula}
+\end{equation}
+Vì số lượng tham số cần huấn luyện trong $\mathbf{A}$ và $\mathbf{B}$ chỉ chiếm chưa tới $1\%$ mô hình gốc, toàn bộ $12\Psi$ bytes của bộ tối ưu hóa AdamW và Master Weights biến mất! Bạn có thể huấn luyện mô hình 7B chỉ với 12 GB VRAM, hoặc 70B trên một card 48 GB duy nhất.
+
+Nhưng một AI Engineer chuyên nghiệp không bao giờ dùng công cụ một cách mù quáng. Hãy giải đáp 3 câu hỏi hóc búa nhất về LoRA:
+
+\begin{debate}
+\textbf{Câu hỏi 1: ``LoRA có tốt bằng Full Fine-Tuning không? Khi nào LoRA thất bại?''}
+
+\textbf{Đáp:} Quy luật cốt lõi được giới nghiên cứu đúc kết là: \textbf{``LoRA học được ít hơn nhưng cũng quên ít hơn'' (LoRA learns less and forgets less)}!
+\begin{itemize}
+  \item \textbf{Khi nào LoRA đạt 99\% hiệu quả của Full Fine-Tuning (Thậm chí tốt hơn):} Khi tác vụ của bạn thuộc nhóm \textit{Định hình hành vi / Phong cách / Định dạng} (như SFT hội thoại, DPO căn chỉnh sở thích, hoặc chạy GRPO trên một miền hẹp). Lúc này mô hình không cần nạp thêm quá nhiều tri thức mới; chiều nội tại của sự thay đổi rất nhỏ \citep{aghajanyan2021intrinsic}. Hơn nữa, vì $\mathbf{W}_0$ bị khóa cứng, LoRA đóng vai trò như một bộ điều chuẩn tự nhiên giúp mô hình ít bị quên kiến thức cũ (Catastrophic Forgetting) hơn hẳn Full Fine-Tuning!
+  \item \textbf{Khi nào LoRA thất bại nặng nề trước Full Fine-Tuning:} Khi bạn muốn \textit{bơm một khối lượng tri thức hoàn toàn mới khổng lồ} vào mô hình --- ví dụ: Continual Pre-training dạy thêm một ngôn ngữ mới mà Base Model chưa biết, hoặc Chưng cất (Distillation) 800,000 chuỗi suy nghĩ Toán/Code phức tạp từ DeepSeek-R1 xuống một mô hình nhỏ. Các ma trận hạng thấp $r = 16$ hay $64$ bị quá tải dung lượng (Capacity Bottleneck) và không thể biểu diễn hết sự dịch chuyển trọng số đa chiều này!
+\end{itemize}
+
+\medskip
+\textbf{Câu hỏi 2: ``Tại sao trong bài báo LoRA gốc năm 2021 người ta khuyên chỉ cần gắn LoRA vào 2 ma trận Attention là \texttt{q\_proj} và \texttt{v\_proj}, nhưng đến năm 2025--2026 mọi người đều khuyên phải gắn vào TẤT CẢ các lớp Linear (\texttt{all-linear})?''}
+
+\textbf{Đáp:} Bài báo \citet{dettmers2023qlora} đã chứng minh thực nghiệm rằng: trong kiến trúc Transformer hiện đại, các khối mạng truyền thẳng \textbf{MLP / SwiGLU} (\texttt{gate\_proj}, \texttt{up\_proj}, \texttt{down\_proj}) mới là nơi lưu trữ phần lớn tri thức và năng lực suy luận của mô hình! Nếu bạn chỉ gắn LoRA vào \texttt{q\_proj, v\_proj} (dù có tăng hạng $r$ lên $128$), chất lượng vẫn thua xa việc gắn LoRA hạng nhỏ $r = 16$ nhưng phủ đều lên \textbf{toàn bộ 7 ma trận Linear} (\texttt{q\_proj, k\_proj, v\_proj, o\_proj, gate\_proj, up\_proj, down\_proj})!
+
+\medskip
+\textbf{Câu hỏi 3: ``Tại sao Learning Rate của LoRA luôn phải đặt lớn gấp 10 lần so với Full Fine-Tuning (ví dụ $2 \times 10^{-4}$ thay vì $2 \times 10^{-5}$)?''}
+
+\textbf{Đáp:} Bởi vì trong LoRA, ma trận $\mathbf{B}$ được khởi tạo bằng $\mathbf{0}$ hoàn toàn ($\mathbf{B}_0 = \mathbf{0}$) để tại bước đầu tiên $\mathbf{B}\mathbf{A} = \mathbf{0}$ không làm xáo trộn mô hình gốc. Do bắt đầu từ điểm yên ngựa $\mathbf{B} = \mathbf{0}$ và chỉ cập nhật trên một không gian con rất nhỏ, các ma trận $\mathbf{A}, \mathbf{B}$ cần một tốc độ học lớn gấp $\approx 10$ lần để tạo ra cùng một biên độ thay đổi đầu ra $\Delta \mathbf{h} = \frac{\alpha}{r}\mathbf{B}\mathbf{A}\mathbf{x}$ như khi cập nhật đồng loạt hàng tỷ tham số của toàn bộ ma trận $\mathbf{W}$!
+\end{debate}
+
+% =========================================================================
+\section{Đánh giá Khoa học (Evaluation) và Khử Thiên kiến LLM-as-a-Judge}
+\label{sec:evaluation}
+
+Làm sao bạn biết mô hình sau khi chạy Post-Training của mình thực sự thông minh hơn hay chỉ đang ``học vẹt và nói dài dòng hơn''?
+
+\subsection{Thuế Căn chỉnh (Alignment Tax) \citep{ouyang2022training, bai2022training}}
+
+Khi bạn ép mô hình phải từ chối các câu hỏi nhạy cảm hoặc phải trả lời theo một khuôn mẫu cố định, năng lực giải quyết các bài toán kiến thức nền tảng của nó có thể bị sụt giảm --- khoản sụt giảm này được gọi là \textbf{Thuế Căn chỉnh (Alignment Tax)}. Do đó, một quy trình đánh giá chuẩn bắt buộc phải đo đồng thời hai nhóm thước đo:
+\begin{enumerate}
+  \item \textbf{Thước đo Năng lực Cốt lõi \& Chống Học tủ (Contamination-Free Verifiable Benchmarks):}
+  \begin{itemize}
+    \item \textbf{IFEval (Instruction Following Evaluation)} \citep{zhou2023instruction}: Kiểm tra bằng code (không dùng AI chấm) xem mô hình có tuân thủ chính xác các ràng buộc cứng như \textit{``Viết đúng 3 đoạn văn, không dùng chữ cái 'e', kết thúc bằng câu hỏi''} hay không.
+    \item \textbf{LiveCodeBench} \citep{jain2024livecodebench}: Liên tục cập nhật các đề thi lập trình mới từ LeetCode, AtCoder và Codeforces \textit{sau ngày phát hành mô hình} để đảm bảo không mô hình nào có thể gian lận bằng cách học thuộc đề thi trong tập Pre-training.
+    \item \textbf{SWE-bench Verified} \citep{jimenez2024swebench}: Giao cho mô hình một kho mã nguồn GitHub thực tế bị lỗi và yêu cầu viết bản vá (git patch) vượt qua toàn bộ unit tests của dự án.
+    \item \textbf{MATH-500 \& AIME 2024/2025} \citep{hendrycks2021measuring}: Thước đo vàng cho các mô hình suy luận Toán học.
+  \end{itemize}
+  \item \textbf{Thước đo Sở thích Mở: Chatbot Arena Elo \citep{chiang2024chatbot} và LLM-as-a-Judge \citep{zheng2023judging}:}
+  Với các câu hỏi mở (viết email, tóm tắt, tư vấn), hệ thống \textbf{Chatbot Arena} \citep{chiang2024chatbot} cho hai mô hình ẩn danh đấu cặp trực tiếp trước người dùng thật và tính điểm \textbf{Elo} dựa trên hàm hợp lý cực đại của mô hình Bradley-Terry:
+  \begin{equation}
+    P(\text{Model } A \succ \text{Model } B) = \frac{1}{1 + 10^{(R_B - R_A) / 400}}
+    \label{eq:elo_prob}
+  \end{equation}
+  Theo công thức~\eqref{eq:elo_prob}, nếu mô hình $A$ cao hơn mô hình $B$ đúng $100$ điểm Elo ($R_A - R_B = 100$), tỷ lệ thắng đối đầu của $A$ trước $B$ là $\frac{1}{1 + 10^{-100/400}} \approx \mathbf{64\%}$.
+\end{enumerate}
+
+\subsection{Ba Thiên kiến Chí mạng của LLM-as-a-Judge và Thuốc giải LC-AlpacaEval}
+
+Trong quá trình phát triển hàng ngày, không ai có thể đợi người dùng thật trên Chatbot Arena chấm điểm. Chúng ta phải dùng một mô hình lớn (như GPT-4o hoặc Claude 3.5/3.7 Sonnet) làm trọng tài tự động (\textbf{LLM-as-a-Judge}) \citep{zheng2023judging}. Tuy nhiên, trọng tài AI mắc \textbf{3 căn bệnh thiên kiến nặng nề}:
+
+\begin{enumerate}
+  \item \textbf{Thiên kiến Vị trí (Position Bias):} Trọng tài AI có xu hướng thích câu trả lời được đặt ở vị trí đầu tiên (Response A) hơn vị trí thứ hai (Response B).
+  \begin{itemize}
+    \item \textit{Cách khử bắt buộc (Position Swapping):} Mọi cặp câu trả lời phải được chấm \textbf{2 lần} với thứ tự đảo ngược $(A, B)$ và $(B, A)$. Chỉ công nhận chiến thắng khi cả 2 lần chấm đều chỉ về cùng một mô hình; nếu 2 lần chấm mâu thuẫn nhau thì tính là Hòa (Tie)!
+  \end{itemize}
+  \item \textbf{Thiên kiến Tự yêu mình (Self-Enhancement Bias):} Trọng tài họ GPT thường chấm điểm cao hơn cho văn phong của các mô hình họ GPT; trọng tài họ Claude thích văn phong của Claude.
+  \begin{itemize}
+    \item \textit{Cách khử:} Sử dụng hội đồng giám khảo đa họ mô hình (Jury of Judges) hoặc dùng mô hình trọng tài khác họ với mô hình đang được huấn luyện.
+  \end{itemize}
+  \item \textbf{Thiên kiến Độ dài (Verbosity / Length Bias):} Đây là căn bệnh nguy hiểm nhất! Trọng tài AI cực kỳ dễ bị lừa bởi các câu trả lời dài dòng, nhiều gạch đầu dòng và chữ in đậm, ngay cả khi nội dung rỗng tuếch. Trên bảng xếp hạng AlpacaEval đời đầu, một mô hình chỉ cần viết dài gấp đôi là tỷ lệ thắng nhảy vọt từ $30\%$ lên $55\%$!
+\end{enumerate}
+
+\paragraph{Thuốc giải chuẩn công nghiệp: Length-Controlled AlpacaEval (LC-AlpacaEval) \citep{dubois2024length}:}
+Để ngăn chặn việc gian lận bằng độ dài câu, \citet{dubois2024length} khớp một mô hình hồi quy Logistic tổng quát tách biệt tác động thực sự của chất lượng mô hình ($\theta_m$) khỏi tác động của chênh lệch độ dài câu ($\text{len}(y_m) - \text{len}(y_b)$):
+\begin{equation}
+  \hat{P}(y_m \succ y_b \mid x) = \sigma\Big( \underbrace{\theta_m - \theta_b}_{\text{Chất lượng thực}} + \underbrace{w_x \cdot \psi(x)}_{\text{Độ khó câu hỏi}} + \underbrace{\beta_{\text{len}} \cdot \tanh\big(\alpha (\text{len}(y_m) - \text{len}(y_b))\big)}_{\text{Phần điểm ăn gian nhờ viết dài}} \Big)
+  \label{eq:lc_alpacaeval}
+\end{equation}
+Sau khi học xong các hệ số từ dữ liệu chấm điểm, \textbf{LC-AlpacaEval} tính tỷ lệ thắng công bằng bằng cách \textbf{gán cưỡng bức chênh lệch độ dài bằng 0} ($\text{len}(y_m) - \text{len}(y_b) = 0$), trả lời chính xác câu hỏi phản thực tế: \textit{``Nếu bắt mô hình của bạn phải viết ngắn gọn đúng bằng mô hình chuẩn, nó sẽ thắng được bao nhiêu phần trăm?''}
+
+% =========================================================================
+\section{Playbook Gỡ lỗi Thực chiến (10 Tình huống Cấp cứu cho AI Engineer)}
+\label{sec:debugging_playbook}
+
+Để khép lại cuốn cẩm nang này, Bảng~\ref{tab:troubleshooting_playbook} tổng hợp \textbf{10 sự cố thực tế phổ biến nhất} mà mọi kỹ sư Post-Training đều sẽ gặp phải ít nhất một lần trong đời, kèm theo chẩn đoán nguyên nhân toán học/hệ thống và phác đồ xử lý tức thì.
+
+\begin{table}[htbp]
+\centering
+\caption{Bảng Cấp cứu \& Gỡ lỗi Hệ thống Post-Training (SFT, DPO, PPO, GRPO)}
+\label{tab:troubleshooting_playbook}
+\renewcommand{\arraystretch}{1.38}
+\footnotesize
+\begin{tabularx}{\textwidth}{p{3.4cm} p{4.5cm} X}
+\toprule
+\textbf{Triệu chứng lâm sàng} & \textbf{Nguyên nhân gốc rễ (Toán / Hệ thống)} & \textbf{Phác đồ xử lý tức thì cho AI Engineer} \\
+\midrule
+\textbf{1. [SFT] Mô hình trả lời xong không chịu dừng}, cứ tự sinh tiếp \texttt{User: ... Assistant: ...} đến kịch trần độ dài. & Khi làm Prompt Masking (Chương~\ref{ch:sft}), bạn đã vô tình gán nhãn \texttt{-100} đè lên cả token kết thúc câu \texttt{<|im\_end|>} hoặc \texttt{<|eot\_id|>}. & Kiểm tra lại mảng \texttt{labels}: bắt buộc vị trí token đóng lượt của Assistant phải mang ID thật (khác \texttt{-100}) để mô hình học được điểm dừng. \\
+\addlinespace
+\textbf{2. [SFT] Loss nổ thành \texttt{NaN}} ngay ở bước 1--5 sau khi thêm Special Tokens mới vào Tokenizer. & Vector embedding của các token mới được khởi tạo ngẫu nhiên với phương sai lớn, làm nổ tích vô hướng ở lớp cuối (Chương~\ref{ch:sft}). & Khởi tạo embedding của các token mới bằng trung bình cộng (\texttt{mean}) của toàn bộ ma trận embedding cũ (Phương trình~\ref{eq:mean_init_eng}). \\
+\addlinespace
+\textbf{3. [SFT Packing] Mô hình trả lời râu ông nọ cắm cằm bà kia} (trộn nội dung câu trước vào câu sau). & Ghép nối nhiều hội thoại (Sequence Packing) nhưng vẫn dùng mặt nạ tam giác chuẩn và quên reset \texttt{position\_ids}. & Bật \texttt{flash\_attn\_varlen\_func} với mảng \texttt{cu\_seqlens} (Block-Diagonal Mask) và reset \texttt{position\_ids} về \texttt{0} ở đầu mỗi mẫu. \\
+\addlinespace
+\textbf{4. [DPO] Khoảng cách thưởng $\hat{r}_w - \hat{r}_l$ tăng cao nhưng mô hình sinh ra toàn ký tự rác.} & Bệnh \textbf{Likelihood Displacement} (Chương~\ref{ch:dpo}): $y_w$ và $y_l$ trùng nhiều từ đầu câu khiến cả $\log \pi_\theta(y_w)$ lẫn $\log \pi_\theta(y_l)$ cùng tụt xuống âm vô cùng. & Thêm thành phần neo SFT (NLL Loss) trên câu thắng $y_w$ với hệ số $\alpha = 0.1$ (Phương trình~\ref{eq:dpo_nll_loss} --- RPO) và giảm Learning Rate xuống $\le 10^{-6}$. \\
+\addlinespace
+\textbf{5. [DPO] Mô hình sau khi căn chỉnh nói dài dòng gấp 3 lần} bình thường. & Thiên kiến độ dài do DPO cộng tổng log-prob trên toàn câu mà không chia trung bình theo số lượng token $|y|$. & Chuyển từ DPO chuẩn sang \textbf{SimPO} \citep{meng2024simpo} (chia trung bình theo $\frac{1}{|y|}$ kèm biên $\gamma$, Phương trình~\ref{eq:simpo_loss}). \\
+\addlinespace
+\textbf{6. [PPO / GRPO] Khoản phạt KL nhảy ra số âm} trên log và quá trình huấn luyện sập. & Bạn đang tính KL trên từng mẫu bằng công thức ngây thơ $k_1 = \log(\pi_\theta / \pi_{\text{ref}})$, vốn nhận giá trị âm khi $\pi_\theta < \pi_{\text{ref}}$. & Thay ngay bằng ước lượng không chệch luôn dương $k_3 = r - \log r - 1$ của Schulman (Phương trình~\ref{eq:schulman_k3}). \\
+\addlinespace
+\textbf{7. [GRPO] Các câu trả lời SAI ngày càng phình dài ra} tới kịch trần $L_{\max}$, trong khi câu đúng ngắn lại. & Phép chia $\frac{1}{|o_i|}$ trong GRPO gốc khiến mô hình cố tình kéo dài câu sai để pha loãng hình phạt âm $\hat{A}_i < 0$ trên mỗi token. & Áp dụng công thức \textbf{Dr.~GRPO} \citep{liu2025understanding}: thay mẫu số biến thiên $|o_i|$ bằng hằng số cố định $L_{\max}$ và bỏ chia $\std(r)$ (Phương trình~\ref{eq:dr_grpo}). \\
+\addlinespace
+\textbf{8. [GRPO] Entropy tụt về 0 quá sớm}, mọi câu trong nhóm $G$ giống hệt nhau, điểm số ngừng tăng. & Ngưỡng cắt trên đối xứng $\epsilon = 0.2$ khóa chặt các token khám phá xác suất thấp; nhiều nhóm có $\std(r) = 0$ làm mất đạo hàm. & Áp dụng \textbf{DAPO} \citep{yu2025dapo}: nâng ngưỡng cắt trên bất đối xứng $\epsilon_{\text{high}} = 0.28$ (Clip-Higher) và bật Dynamic Sampling lọc bỏ các nhóm có $\std(r) = 0$. \\
+\addlinespace
+\textbf{9. [Reasoning RL] Hỏi ``1+1 bằng mấy'' cũng nháp 2,000 chữ} trong thẻ \texttt{<think>}. & Bệnh \textbf{Overthinking} \citep{chen2025donot} do hàm thưởng chỉ chấm đúng/sai mà không phạt chi phí token trên các câu hỏi dễ. & Thêm hình phạt độ dài có điều kiện cho các nhóm giải đúng 100\%, hoặc áp dụng \textbf{Budget Forcing} \citep{muennighoff2025s1} lúc Inference. \\
+\addlinespace
+\textbf{10. [All] Tràn VRAM (OOM) ở bước tính Loss} dù đã bật ZeRO-3 và Batch Size $= 1$. & Ma trận Logits kích thước $(B, T, |\mathcal{V}|)$ ở lớp đầu ra từ vựng (LM Head) phình lên hàng chục GB khi $T \ge 8{,}192$ và $|\mathcal{V}| \ge 128{,}000$. & Cài đặt và kích hoạt \texttt{Liger-Kernel} (\texttt{FusedLinearCrossEntropy} / Chunked Logits) để cắt nhỏ chiều thời gian $T$ trước khi nhân với bảng từ vựng. \\
+\bottomrule
+\end{tabularx}
+\end{table}

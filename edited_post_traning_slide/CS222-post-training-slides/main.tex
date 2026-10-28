@@ -1,0 +1,63 @@
+\documentclass[11pt,aspectratio=169]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\shorthandoff{"}
+\AtBeginDocument{\shorthandoff{"}}
+\pdfstringdefDisableCommands{\def\\{ }}
+
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsfonts,mathtools,bm}
+\usepackage{booktabs,tabularx,array,multirow}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,backgrounds}
+\input{theme}
+
+\DeclareMathOperator{\sen}{sen}
+\DeclareMathOperator{\tg}{tg}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\DKL}{D_{\mathrm{KL}}}
+\DeclareMathOperator{\clip}{\mathrm{clip}}
+\DeclareMathOperator{\mean}{\mathrm{mean}}
+\DeclareMathOperator{\std}{\mathrm{std}}
+\newcommand{\cancel}[1]{\textcolor{reforange}{\underbrace{#1}_{\text{Triệt tiêu }=0}}}
+
+\title[Post-training of Language Models]{Post-training\\of Language Models}
+\author[Nhóm thực hiện]{%
+  Hà Thanh Phong -- 24520024\\
+  Hà Xuân Thiện -- 24520031\\
+  Trần Quang Trường -- 24521901}
+\institute{University of Information Technology -- VNUHCM}
+\date{\today}
+\bibliographystyle{apalike}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Mục lục chuyên đề}
+  \lead{Lộ trình năm giai đoạn tiến hóa của Post-training (2020--2026).}
+  \vspace{0.15cm}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{6pt}
+    \item \textbf{\textcolor{reforange}{01}\quad Supervised Fine-Tuning (SFT):} Từ dự đoán văn bản đến tuân thủ chỉ thị và Loss Masking.
+    \item \textbf{\textcolor{reforange}{02}\quad Alignment với RLHF và PPO:} Học từ cặp đối chiếu, Reward Model và kiểm soát bằng KL penalty.
+    \item \textbf{\textcolor{reforange}{03}\quad Direct Preference Optimization (DPO):} Closed-form solution và tối ưu trực tiếp không cần mạng Critic.
+    \item \textbf{\textcolor{reforange}{04}\quad RLVR và GRPO:} Thưởng kiểm chứng khách quan, chuẩn hóa nhóm và sự nảy sinh tư duy suy luận.
+    \item \textbf{\textcolor{reforange}{05}\quad Knowledge Distillation:} Chuyển giao năng lực Teacher-Student, Forward/Reverse KL và LoRA.
+  \end{enumerate}
+  \par\vspace{0pt}
+\end{frame}
+
+\input{sections/part1_sft}
+\input{sections/part2_rlhf_ppo}
+\input{sections/part3_dpo_variants}
+\input{sections/part4_rlvr_grpo}
+\input{sections/part5_distillation_summary}
+
+\end{document}

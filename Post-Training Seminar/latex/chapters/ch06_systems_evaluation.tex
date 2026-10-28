@@ -1,0 +1,166 @@
+\chapter{Kiến trúc Bộ nhớ Hệ thống, Đánh giá Mô hình \& Chẩn đoán Lỗi}
+\label{chap:systems_evaluation}
+
+\begin{pedagogy}
+Chương cuối cùng của khóa học trang bị cho người học tư duy hệ thống toàn diện: từ việc giải phẫu từng byte bộ nhớ phần cứng VRAM (để hiểu tại sao việc huấn luyện đòi hỏi hạ tầng siêu máy tính), các kỹ thuật song song hóa (FSDP, ZeRO, LoRA), bản chất lý thuyết thông tin của Thuế Căn chỉnh (\textit{Alignment Tax}), các mô hình thống kê khử thiên kiến trong đánh giá tự động (LLM-as-a-Judge, LC-AlpacaEval), và bảng chẩn đoán các hiện tượng bất thường khi huấn luyện.
+\end{pedagogy}
+
+% ============================================================================
+\section{Giải phẫu Bộ nhớ Phần cứng (VRAM Anatomy) từ Nguyên lý Gốc}
+\label{sec:vram_anatomy}
+
+Một ngộ nhận phổ biến của người mới tiếp cận Post-training là: \textit{``Một mô hình 8 tỷ tham số (8B) lưu ở dạng nửa độ chính xác 16-bit (\texttt{bf16} tốn 2 bytes/tham số) chỉ cần $8 \times 2 = 16\text{ GB}$ VRAM là có thể huấn luyện được!''}
+
+Thực tế toán học và phần cứng hoàn toàn trái ngược: $16\text{ GB}$ chỉ đủ để nạp mô hình chạy \textbf{Suy luận (Inference)}. Khi bước vào \textbf{Huấn luyện (Training)} với bộ tối ưu hóa AdamW \citep{loshchilov2019decoupled} và chế độ Độ chính xác Hỗn hợp (\textit{Mixed Precision Training}) \citep{micikevicius2018mixed}, bộ nhớ phần cứng bị chi phối bởi hai thành phần chính \citep{rajbhandari2020zero}:
+
+\subsection{1. Bộ nhớ Trạng thái Mô hình Tĩnh (Model States)}
+Với một mô hình có $\Psi$ tham số (ví dụ $\Psi = 8 \times 10^9$ cho Llama-3-8B):
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Trọng số Mô hình (Weights $\mathbf{W}$ ở \texttt{bf16}):} Mỗi tham số tốn $2$ bytes $\implies 2\Psi$ bytes ($16\text{ GB}$).
+    \item \textbf{Đạo hàm (Gradients $\nabla_{\mathbf{W}}$ ở \texttt{bf16}):} Mỗi tham số tốn $2$ bytes $\implies 2\Psi$ bytes ($16\text{ GB}$).
+    \item \textbf{Bản sao Trọng số Gốc Độ chính xác Cao (Master Weights ở \texttt{fp32}):} Khi cập nhật $\mathbf{W} \leftarrow \mathbf{W} - \eta \cdot \frac{m_t}{\sqrt{v_t} + \epsilon}$, bước nhảy thường có độ lớn cực nhỏ ($\approx 10^{-6}$). Trong định dạng 16-bit (\texttt{bf16}), các số quá nhỏ khi cộng vào số lớn sẽ bị hiện tượng triệt tiêu số học (\textit{Underflow}). AdamW bắt buộc phải duy trì một bản sao chính xác tuyệt đối ở 32-bit: tốn $4\Psi$ bytes ($32\text{ GB}$).
+    \item \textbf{Trạng thái Động lượng Bậc một của AdamW ($m_t$ ở \texttt{fp32}):} Tốn $4$ bytes/tham số $\implies 4\Psi$ bytes ($32\text{ GB}$).
+    \item \textbf{Trạng thái Động lượng Bậc hai của AdamW ($v_t$ ở \texttt{fp32}):} Tốn $4$ bytes/tham số $\implies 4\Psi$ bytes ($32\text{ GB}$).
+\end{enumerate}
+
+\begin{theorem}[Tổng Bộ nhớ Trạng thái Mô hình Tĩnh]
+Tổng dung lượng VRAM tĩnh bắt buộc phải có cho một mô hình $\Psi$ tham số huấn luyện bằng AdamW là:
+\begin{equation}
+    M_{\text{static}} = 2\Psi + 2\Psi + 4\Psi + 4\Psi + 4\Psi = \mathbf{16\Psi \text{ bytes}}.
+    \label{eq:static_memory}
+\end{equation}
+Với mô hình 8B tham số: $M_{\text{static}} = 16 \times 8 \times 10^9 \text{ bytes} \approx \mathbf{128\text{ GB VRAM}}$!
+\end{theorem}
+
+\subsection{2. Bộ nhớ Động: KV-Cache \& Trạng thái Kích hoạt Trung gian (Activations)}
+Bên cạnh 128 GB bộ nhớ tĩnh, GPU còn phải chứa bộ nhớ động biến thiên theo kích thước lô ($B$) và độ dài chuỗi ($L$):
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Bộ nhớ KV-Cache (trong pha Rollout sinh văn bản):}
+    Với mô hình có $n_{\text{layers}}$ tầng, $n_{\text{heads}}^{\text{KV}}$ đầu chú ý cho Key/Value, và chiều ẩn mỗi đầu $d_{\text{head}}$, bộ nhớ KV-Cache cho một chuỗi độ dài $L$ là:
+    \begin{equation}
+        M_{\text{KV}} = 2 \times n_{\text{layers}} \times n_{\text{heads}}^{\text{KV}} \times d_{\text{head}} \times L \times B \times 2\text{ bytes}.
+        \label{eq:kv_cache_mem}
+    \end{equation}
+    Kiến trúc \textbf{Grouped-Query Attention (GQA)} giúp giảm số đầu KV đi $4$ đến $8$ lần so với Multi-Head Attention truyền thống, tiết kiệm đáng kể VRAM trong pha sinh mẫu tự hồi quy.
+    \item \textbf{Bộ nhớ Trạng thái Kích hoạt (Activations trong pha Training):}
+    Để phục vụ việc tính đạo hàm trong pha lan truyền ngược, GPU bắt buộc phải lưu giữ toàn bộ các ma trận trung gian của pha lan truyền xuôi qua tất cả các tầng Transformer.
+    Đặc biệt tại tầng cuối cùng (\textbf{Language Modeling Head}), tensor logits có kích thước:
+    \begin{equation}
+        \mathbf{Z}_{\text{logits}} \in \mathbb{R}^{B \times L \times |V|}.
+    \end{equation}
+    Với kích thước từ vựng hiện đại $|V| = 128,256$, độ dài chuỗi $L = 8,192$, và $B = 4$, chỉ riêng một tensor logits lưu ở định dạng \texttt{fp32} đã chiếm:
+    \begin{equation}
+        4 \times 8,192 \times 128,256 \times 4\text{ bytes} \approx \mathbf{16.8\text{ GB VRAM}} \text{ cho duy nhất một tensor}!
+    \end{equation}
+\end{itemize}
+
+\subsection{Cường độ Số học (Arithmetic Intensity) \& Sự Nghẽn Cổ chai Phần cứng}
+Cường độ số học (\textit{Arithmetic Intensity}) được định nghĩa là số phép tính dấu phẩy động (FLOPs) thực hiện trên mỗi byte dữ liệu truy xuất từ bộ nhớ:
+\begin{equation}
+    I = \frac{\text{Số phép tính (FLOPs)}}{\text{Dung lượng đọc/ghi bộ nhớ (Bytes)}}.
+\end{equation}
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Pha Rollout (Sinh token tự hồi quy):} Mỗi bước sinh 1 token chỉ thực hiện phép nhân ma trận--vector ($\approx 2\Psi$ FLOPs) nhưng phải đọc toàn bộ ma trận trọng số $2\Psi$ bytes từ bộ nhớ toàn cục (HBM). Cường độ số học đạt $I \approx \frac{2\Psi}{2\Psi} = \mathbf{1\text{ FLOP/Byte}}$. Vì các GPU hiện đại có năng lực tính toán hàng trăm TFLOPs nhưng băng thông bộ nhớ chỉ vài TB/s, pha Rollout bị giới hạn bởi băng thông bộ nhớ (\textbf{Memory-Bandwidth Bound}), nhân tính toán phần lớn thời gian phải ngồi chờ dữ liệu nạp vào.
+    \item \textbf{Pha Training (Lan truyền xuôi và ngược):} Xử lý ma trận--ma trận trên toàn bộ chuỗi $L$, cường độ số học đạt $I \gg 100\text{ FLOP/Byte}$, hệ thống được khai thác tối đa công suất tính toán (\textbf{Compute-Bound}).
+\end{itemize}
+
+% ============================================================================
+\section{Bốn Trụ cột Tối ưu Hóa Hệ thống Post-Training Hiện đại}
+\label{sec:system_optimizations}
+
+Để vận hành Post-training trên phần cứng thực tế, 4 kỹ thuật kiến trúc sống còn được áp dụng:
+
+\subsection{1. Tính trước Log-Probability Tham chiếu (Precomputing Reference Logprobs)}
+Trong Offline DPO (Chương 3), mô hình tham chiếu $\pi_{\text{ref}}$ đóng băng hoàn toàn và tập dữ liệu $(x, y_w, y_l)$ cố định. Thay vì nạp cả $\pi_\theta$ và $\pi_{\text{ref}}$ lên GPU trong lúc huấn luyện (tốn gấp đôi bộ nhớ), ta chạy một lượt suy luận duy nhất trên tập dữ liệu để tính trước toàn bộ các số vô hướng $\log \pi_{\text{ref}}(y_w \mid x)$ và $\log \pi_{\text{ref}}(y_l \mid x)$, lưu vào ổ cứng rồi giải phóng hoàn toàn $\pi_{\text{ref}}$ khỏi GPU!
+
+\subsection{2. Tái tính toán Kích hoạt (Activation / Gradient Checkpointing \citealt{chen2016training})}
+Thay vì lưu giữ toàn bộ kích hoạt trung gian của tất cả các tầng Transformer trong pha đi xuôi, ta chỉ lưu lại vector trạng thái ẩn tại ranh giới đầu mỗi tầng (\textit{Checkpoint}) và xóa sạch các ma trận trung gian bên trong tầng đó. Khi pha lan truyền ngược lùi đến tầng nào, hệ thống sẽ tính xuôi lại các phép toán của riêng tầng đó.
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Sự đánh đổi toán học:} Tăng thời gian tính toán thêm khoảng $25\% - 33\%$ (do phải tính xuôi 2 lần), nhưng \textbf{giảm bộ nhớ Activations từ $\mathcal{O}(N)$ xuống $\mathcal{O}(\sqrt{N})$ (tiết kiệm tới $70\% - 80\%$ bộ nhớ động)}, cho phép tăng chiều dài ngữ cảnh $L$ lên gấp 4 lần.
+\end{itemize}
+
+\subsection{3. Phân mảnh Trạng thái Mô hình (ZeRO-3 \& FSDP \citealt{rajbhandari2020zero, zhao2023pytorch})}
+Thay vì sao chép toàn bộ $128\text{ GB}$ trạng thái tĩnh của mô hình lên từng GPU (Data Parallelism truyền thống), kiến trúc \textbf{ZeRO-3 / FSDP (Fully Sharded Data Parallel)} chia nhỏ $16\Psi$ bytes trạng thái mô hình trải đều cho $N_{\text{GPU}}$ thiết bị trong cụm:
+\begin{equation}
+    M_{\text{per-GPU}} = \frac{2\Psi + 2\Psi + 12\Psi}{N_{\text{GPU}}} = \frac{16\Psi}{N_{\text{GPU}}}.
+\end{equation}
+Khi tính toán đến tầng Transformer nào, các GPU thực hiện phép truyền thông \texttt{All-Gather} để gom tạm thời trọng số của tầng đó về, tính xong lập tức giải phóng ngay.
+
+\subsection{4. Thích nghi Hạng Thấp (LoRA \& QLoRA \citealt{hu2022lora, dettmers2023qlora})}
+Dựa trên phát hiện của \citet{aghajanyan2021intrinsic} rằng quá trình tinh chỉnh mô hình ngôn ngữ có \textbf{Số chiều Nội tại rất thấp (Low Intrinsic Dimension)}, phương pháp \textbf{LoRA (Low-Rank Adaptation)} \citep{hu2022lora} đóng băng hoàn toàn ma trận trọng số gốc $\mathbf{W}_0 \in \mathbb{R}^{d \times k}$ và chỉ huấn luyện một ma trận cập nhật hạng thấp:
+\begin{equation}
+    \mathbf{W} = \mathbf{W}_0 + \Delta \mathbf{W} = \mathbf{W}_0 + \frac{\alpha}{r} \mathbf{B}\mathbf{A},
+    \label{eq:lora_formula}
+\end{equation}
+trong đó $\mathbf{B} \in \mathbb{R}^{d \times r}, \mathbf{A} \in \mathbb{R}^{r \times k}$ với hạng $r \ll \min(d, k)$ (thường chọn $r \in [8, 32]$), và $\alpha$ là hệ số tỷ lệ cố định.
+\begin{itemize}[leftmargin=1.2cm]
+    \item Vì số lượng tham số có thể huấn luyện giảm hơn $99\%$, toàn bộ gánh nặng $12\Psi$ bytes của bộ tối ưu AdamW gần như biến mất hoàn toàn!
+    \item Trong \textbf{QLoRA} \citep{dettmers2023qlora}, ma trận gốc $\mathbf{W}_0$ còn được lượng tử hóa xuống định dạng 4-bit NormalFloat (NF4), cho phép tinh chỉnh mô hình 70B trên duy nhất một card đồ họa phổ thông 48 GB VRAM.
+\end{itemize}
+
+% ============================================================================
+\section{Thuế Căn chỉnh (Alignment Tax) \& Hệ sinh thái Đánh giá Mô hình}
+\label{sec:evaluation_ecosystem}
+
+\subsection{Tại sao không thể dùng Perplexity? Khái niệm Thuế Căn chỉnh (Alignment Tax)}
+Trong Pre-training, chất lượng mô hình được đo bằng độ hỗn độn (\textbf{Perplexity -- PPL}): $\text{PPL} = \exp\left(-\frac{1}{T}\sum_t \log P(x_t \mid x_{<t})\right)$.
+Tuy nhiên, \textbf{sau khi mô hình trải qua SFT, RLHF hoặc DPO, chỉ số Perplexity trên các tập văn bản Internet thông thường gần như chắc chắn sẽ tăng lên (xấu đi)!}
+Hiện tượng này được gọi là \textbf{Thuế Căn chỉnh (Alignment Tax)} \citep{ouyang2022training, bai2022training}:
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Bản chất lý thuyết thông tin:} Base Model có entropy phân phối rất cao, bao phủ mọi phong cách ngôn ngữ tồn tại trên mạng (từ văn chương, diễn đàn đến tin tức). Quá trình Post-training thực hiện \textbf{Thu hẹp Mốt Phân phối (Mode Collapse / Entropy Reduction)}: dồn phần lớn khối lượng xác suất vào một vùng không gian hẹp của phong cách trợ lý chuẩn mực, hữu ích và vô hại. Do đó, khả năng dự đoán các từ ngữ ngẫu nhiên trên mạng Internet của nó giảm sút, nhưng giá trị ứng dụng thực tiễn đối với con người lại tăng vọt.
+\end{itemize}
+
+\subsection{Đánh giá Mở qua Giám khảo AI (LLM-as-a-Judge) \& Ba Thiên kiến Nghiêm trọng}
+Đối với các câu hỏi mở (viết luận, tư vấn), phương pháp chuẩn mực hiện nay là sử dụng một mô hình giám khảo mạnh (như GPT-4) để so sánh câu trả lời của mô hình cần đo với một mô hình mốc qua hệ thống xếp hạng Elo / Bradley--Terry trên \textbf{Chatbot Arena} \citep{chiang2024chatbot} và \textbf{MT-Bench} \citep{zheng2023judging}.
+
+Tuy nhiên, nghiên cứu của \citet{zheng2023judging} và \citet{dubois2024length} đã vạch rõ ba thiên kiến tâm lý học nguy hiểm của Giám khảo AI:
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Thiên kiến Vị trí (Position Bias):} Giám khảo AI có xu hướng ưu ái câu trả lời được đặt ở vị trí đầu tiên (Phương án A).
+    \begin{itemize}
+        \item *Biện pháp khử chuẩn:* Luôn thực hiện đánh giá hai lượt với thứ tự hoán vị đảo ngược: Lượt 1 đưa $(A, B)$, Lượt 2 đưa $(B, A)$. Một mô hình chỉ được tính là thắng nếu chiến thắng ở cả hai lượt hoán vị.
+    \end{itemize}
+    \item \textbf{Thiên kiến Độ dài \& Trình bày (Verbosity / Length Bias):} Giám khảo AI bị hấp dẫn bởi các câu trả lời dài dòng, chia nhiều đề mục in đậm bắt mắt ngay cả khi nội dung rỗng tuếch.
+    \begin{itemize}
+        \item *Biện pháp khử chuẩn (\textbf{LC-AlpacaEval 2} \citealt{dubois2024length}):* Sử dụng mô hình hồi quy tuyến tính tổng quát tách xác suất thắng của mô hình thành hai thành phần: năng lực nội tại và độ lệch chiều dài $\Delta L = |y_{\text{model}}| - |y_{\text{baseline}}|$, sau đó tính tỷ lệ thắng chuẩn hóa khi ép $\Delta L = 0$ (\textbf{Length-Controlled Win Rate}). Kỹ thuật này giúp độ tương quan giữa đánh giá tự động và đánh giá của con người trên Chatbot Arena tăng từ $0.94$ lên $0.98$!
+    \end{itemize}
+    \item \textbf{Thiên kiến Tự tôn (Self-Enhancement Bias):} Mô hình giám khảo thường chấm điểm thiên vị cho các mô hình có cùng họ kiến trúc hoặc được chắt lọc dữ liệu từ chính nó.
+\end{enumerate}
+
+\subsection{Các Bộ Tiêu chuẩn Đánh giá Kiểm chứng Khách quan (Verifiable Benchmarks)}
+Đối với các mô hình suy luận (Reasoning LLMs):
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Toán học \& Lập luận:} \textbf{GSM8K} \citep{cobbe2021training} (Toán đố đa bước cấp 2), \textbf{MATH-500} \citep{hendrycks2021measuring} (Toán Olympic cấp trung học), và \textbf{AIME} (Kỳ thi chọn đội tuyển Olympic Toán học Hoa Kỳ).
+    \item \textbf{Lập trình \& Kỹ thuật Phần mềm:} \textbf{LiveCodeBench} \citep{jain2024livecodebench} (Bộ đo thu thập liên tục các bài thi mới nhất từ LeetCode/Codeforces sau ngày đóng dữ liệu để chống rò rỉ đề thi) và \textbf{SWE-bench} \citep{jimenez2024swebench} (Đánh giá khả năng tự động giải quyết các lỗi thực tế trên các kho mã nguồn mở GitHub).
+    \item \textbf{Tuân thủ Ràng buộc Chỉ thị:} \textbf{IFEval} \citep{zhou2023instruction} (Kiểm tra bằng mã nguồn tự động khả năng tuân thủ các chỉ thị hình thức nghiêm ngặt, ví dụ: \textit{``Viết bài văn gồm đúng 4 đoạn, đoạn 2 phải có ít nhất 3 dấu chấm phẩy và không được dùng chữ cái 'e' ''}).
+\end{itemize}
+
+% ============================================================================
+\section{Bảng Chẩn đoán Lỗi Thực chiến cho Nghiên cứu Sinh Post-Training}
+\label{sec:troubleshooting_guide}
+
+Bảng~\ref{tab:troubleshooting} đúc kết các hiện tượng bất thường kinh điển trong quá trình huấn luyện Post-training, phân tích nguyên nhân gốc rễ toán học và giải pháp khắc phục chuẩn mực từ các phòng thí nghiệm hàng đầu.
+
+\begin{table}[h!]
+\centering
+\small
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{3.5cm} p{5.5cm} X}
+\toprule
+Triệu chứng Huấn luyện & Nguyên nhân Gốc rễ Toán học & Giải pháp Khắc phục Lý thuyết \\
+\midrule
+1. Sau SFT, mô hình tự lặp lại câu hỏi của người dùng hoặc nói lan man không dừng. & • Lỗi Prompt Masking: Quên gán $m_t = 0$ ở phần câu hỏi khiến mô hình học cách sinh lại câu hỏi; hoặc quên gán $m_t = 1$ tại token $\langle|\text{im\_end}|\rangle$ của Assistant khiến mô hình không học được xác suất dừng. & • Kiểm tra lại dãy mặt nạ: chỉ bật $m_t = 1$ từ token đầu tiên của Assistant cho đến hết token kết thúc lượt $\langle|\text{im\_end}|\rangle$ tương ứng (Chương 1). \\
+\midrule
+2. Trong SFT đóng gói chuỗi, mô hình đột ngột đổi chủ đề giữa chừng khi đang trả lời. & • Lỗi rò rỉ ngữ cảnh: Dùng mặt nạ tam giác dưới thông thường của Pre-training thay vì Mặt nạ Đường chéo Khối; hoặc quên đặt lại vị trí RoPE về $0$. & • Áp dụng Block-Diagonal Attention Mask cô lập tuyệt đối các mẫu hội thoại khác nhau và đặt lại dãy chỉ số vị trí RoPE về $0$ tại đầu mỗi mẫu (Chương 1). \\
+\midrule
+3. Trong DPO, phần thưởng ẩn tăng vọt lên trời chỉ sau 50 bước nhưng mô hình sinh ra từ lặp rác. & • Sụp đổ phân phối do mất neo KL: Hệ số $\beta$ đặt quá nhỏ ($\beta \le 0.001$) hoặc Learning Rate quá lớn ($\ge 10^{-4}$), làm đứt sợi dây liên kết với $\pi_{\text{ref}}$. & • Tăng hệ số $\beta$ lên vùng chuẩn $[0.1, 0.5]$ và hạ Learning Rate của DPO xuống thấp hơn SFT 10 lần (thường $5 \times 10^{-7}$ đến $5 \times 10^{-6}$). \\
+\midrule
+4. Trong DPO, cả $\log \pi(y_w)$ và $\log \pi(y_l)$ đều tụt dốc âm sâu, văn bản xuất hiện ký tự lạ. & • Hiện tượng Dịch chuyển Xác suất (Likelihood Displacement): Đè xác suất câu dở kéo tụt luôn cả câu tốt do chia sẻ chung token. & • Áp dụng biến thể RPO / DPO+NLL: Cộng thêm thành phần mất mát SFT $\alpha \mathcal{L}_{\text{SFT}}(y_w)$ ($\alpha \approx 0.1$) để neo giữ xác suất câu đúng (Chương 3). \\
+\midrule
+5. Trong GRPO, gradient biến mất ở nhiều bước liên tiếp, quá trình học bị đình trệ. & • Hiện tượng Đồng nhất Nhóm ($\std(r) = 0$): Câu hỏi quá dễ (cả nhóm đều đúng) hoặc quá khó (cả nhóm đều sai), làm tử số $r_i - \bar{r} = 0 \implies A_i = 0$. & • Áp dụng Lọc Động (DAPO): Tự động loại bỏ các câu hỏi có toàn bộ nhóm đúng hết hoặc sai hết, chỉ giữ lại các câu hỏi có $0 < \bar{r} < 1$ (Chương 4). \\
+\midrule
+6. Trong GRPO, các câu trả lời sai của mô hình ngày càng dài dòng vô tận. & • Thiên kiến độ dài do hệ số chia $\frac{1}{|o_i|}$: Khi $A_i < 0$, mô hình phát hiện kéo dài câu trả lời ra vô tận sẽ pha loãng mức phạt âm về $0$. & • Áp dụng giải pháp Dr. GRPO: Thay thế hệ số $\frac{1}{|o_i|}$ bằng một hằng số chuẩn hóa cố định $L_{\max}$ trên toàn bộ tập dữ liệu (Chương 4). \\
+\bottomrule
+\end{tabularx}
+\caption{Bảng chẩn đoán và khắc phục các bất thường toán học trong huấn luyện Post-training.}
+\label{tab:troubleshooting}
+\end{table}

@@ -1,0 +1,200 @@
+% =========================================================================
+% CHƯƠNG 5: CHƯNG CẤT TRI THỨC (DISTILLATION) & HỢP NHẤT MÔ HÌNH (MODEL MERGING)
+% =========================================================================
+\chapter{Chưng cất Tri thức (Knowledge Distillation) và Hợp nhất Mô hình (Model Merging)}
+\label{ch:distillation_merging}
+
+Trong bốn chương đầu, chúng ta đã tìm hiểu cách rèn luyện những ``nhà vô địch'' thông qua SFT, DPO và RLVR/GRPO. Tuy nhiên, trong thực tế triển khai sản phẩm (Production Engineering), bạn rất hiếm khi có đủ ngân sách để chạy trực tiếp một mô hình khổng lồ 671 tỷ tham số (như DeepSeek-R1) nhằm phục vụ hàng triệu người dùng với độ trễ dưới 500ms.
+
+Câu hỏi thực chiến đặt ra cho mọi AI Engineer là: \textit{``Làm thế nào để nén trí thông minh suy luận của một mô hình 671B xuống một mô hình nhỏ gọn 7B hoặc 32B có thể chạy vừa trên một card GPU duy nhất? Và nếu tôi có một mô hình 7B giỏi viết Code cùng một mô hình 7B khác giỏi Tiếng Việt, làm sao để gộp chúng lại làm một mà không cần tốn tiền huấn luyện lại?''}
+
+Chương này sẽ giải đáp trọn vẹn hai câu hỏi đó thông qua hai vũ khí lợi hại nhất của kỹ sư Post-Training hiện đại: \textbf{Chưng cất Tri thức (Knowledge Distillation)} \citep{hinton2015distilling, gu2024minillm, agarwal2024onpolicy, deepseek2025r1} và \textbf{Hợp nhất Mô hình (Model Merging)} \citep{yadav2023ties, yu2024language}.
+
+% =========================================================================
+\section{Nghịch lý DeepSeek-R1: Tại sao Chưng cất (Distillation) lại thắng tự chạy RL trên Mô hình Nhỏ?}
+\label{sec:distill_vs_rl}
+
+Khi đọc báo cáo của DeepSeek-R1 \citep{deepseek2025r1}, nhiều kỹ sư ngạc nhiên trước một phát hiện cực kỳ quan trọng: nhóm tác giả đã thử lấy mô hình \texttt{Qwen-32B-Base} và cho nó tự chạy RLVR (GRPO) từ con số 0 giống hệt cách họ làm với \texttt{DeepSeek-R1-Zero} (671B) trong hơn 10,000 bước. Sau đó, họ so sánh nó với một bản \texttt{DeepSeek-R1-Distill-Qwen-32B} chỉ đơn giản là học SFT trên 800,000 mẫu chuỗi suy nghĩ do đàn anh 671B sinh ra.
+
+\textbf{Kết quả:} Bản \texttt{Distill-32B} đè bẹp bản tự chạy \texttt{RL-32B} tới gần 20\% điểm tuyệt đối trên cả hai bài thi toán khắc nghiệt nhất là AIME 2024 ($72.6\%$ vs.~$47.0\%$) và MATH-500 ($94.3\%$ vs.~$83.0\%$), với chi phí tính toán rẻ hơn hàng chục lần!
+
+\begin{debate}
+\textbf{Hỏi: Tại sao ở Chương~\ref{ch:reasoning_rl} chúng ta vừa ca ngợi RLVR/GRPO là chìa khóa mở khóa suy luận, mà sang đến mô hình nhỏ (7B--32B) thì tự chạy RL lại thua xa việc chưng cất (Distillation) từ mô hình lớn?}
+
+\textbf{Đáp:} Hãy nhớ lại bản chất của Học tăng cường (RL): RL chỉ có thể thưởng điểm $+1$ khi mô hình \textbf{vô tình tự mò ra được ít nhất một lời giải đúng} trong nhóm $G$ lần thử!
+\begin{itemize}
+  \item \textbf{Trên mô hình khổng lồ (671B):} Dung lượng tri thức nền lớn đến mức khi lấy mẫu $G = 64$ lần cho một bài toán khó, xác suất nó vô tình lắp ghép ra một con đường suy luận đúng đạt khoảng $5\% - 10\%$. Ngay khi bắt gặp tia lửa đúng đắn đó, GRPO lập tức khuếch đại nó lên.
+  \item \textbf{Trên mô hình nhỏ (7B--32B):} Không gian tìm kiếm của chuỗi suy nghĩ dài 10,000 tokens quá mênh mông so với năng lực nội tại của mô hình nhỏ. Khi tự mò mẫm từ con số 0, cả 64 câu trả lời của mô hình nhỏ đều đi vào ngõ cụt ($r_1 = \dots = r_{64} = 0$), hoặc chỉ giải được theo những cách ngây thơ kém hiệu quả.
+  \item \textbf{Vai trò của Chưng cất (Distillation):} Mô hình thầy giáo 671B đã đốt hàng triệu giờ GPU chạy RL để tìm ra được những ``khuôn mẫu tư duy bậc cao'' (cách đặt ẩn phụ, cách kiểm tra điều kiện biên, cách quay lui khi gặp mâu thuẫn). Khi chưng cất chuỗi suy nghĩ của thầy 671B xuống trò 32B, trò không phải mò kim đáy bể nữa mà được \textbf{trao tận tay bản đồ kho báu}!
+\end{itemize}
+
+\medskip
+\textbf{Quy tắc vàng cho AI Engineer \citep{deepseek2025r1}:} \textit{Nếu mục tiêu của bạn là vượt qua giới hạn trí tuệ hiện tại của loài người trên mô hình khổng lồ lớn nhất hiện có, bạn bắt buộc phải dùng RL. Nhưng nếu mục tiêu của bạn là tạo ra một mô hình nhỏ (1.5B -- 32B) để chạy thực tế trong doanh nghiệp, hãy luôn luôn bắt đầu bằng việc Chưng cất (Distillation) từ mô hình Reasoning lớn nhất mà bạn có quyền truy cập, rồi sau đó mới chạy nhẹ một vòng RL tinh chỉnh cuối cùng!}
+\end{debate}
+
+% =========================================================================
+\section{Ba Cấp độ Chưng cất Tri thức (Knowledge Distillation) cho LLMs}
+\label{sec:three_distill_levels}
+
+Tùy thuộc vào việc bạn chỉ gọi được mô hình Thầy (Teacher $P_T$) qua cổng API đóng (như GPT-4 / Claude) hay nắm trong tay toàn bộ trọng số của mô hình Thầy trên máy chủ của mình, chúng ta có 3 cấp độ chưng cất từ dễ đến sâu sắc nhất.
+
+\subsection{Cấp độ 1: Chưng cất Mức Chuỗi (Sequence-Level / Black-Box Distillation)}
+
+Khi mô hình Thầy là một hộp đen (chỉ trả về văn bản thuần túy mà không trả về bảng phân phối xác suất toàn bộ từ vựng), ta sử dụng \textbf{Sequence-Level Knowledge Distillation} \citep{kim2016sequence} kết hợp với \textbf{Distilling Step-by-Step} \citep{hsieh2023distilling}:
+\begin{enumerate}
+  \item Đưa tập câu hỏi $\{x^{(i)}\}$ cho mô hình Thầy sinh ra cả chuỗi lập luận trung gian $r^{(i)}$ (Rationale / thẻ \texttt{<think>}) lẫn câu trả lời cuối cùng $y^{(i)}$.
+  \item Dùng bộ kiểm chứng (Rejection Sampling) lọc giữ lại các mẫu có đáp số $y^{(i)}$ chính xác.
+  \item Huấn luyện mô hình Trò (Student $\pi_\theta$) bằng hàm mất mát Cross-Entropy (SFT) chuẩn để bắt chước toàn bộ chuỗi $(r^{(i)}, y^{(i)})$ của Thầy.
+\end{enumerate}
+Như đã chứng minh bởi \citet{hsieh2023distilling}, việc ép mô hình Trò phải học cả phần giải thích từng bước $r^{(i)}$ (thay vì chỉ học đáp số $y^{(i)}$) giúp giảm tới 50\%--75\% lượng dữ liệu cần thiết để đạt cùng một độ chính xác.
+
+\subsection{Cấp độ 2: Chưng cất Mức Logit \& ``Tri thức Tối'' (White-Box Logit Distillation)}
+
+Nếu cả mô hình Thầy (ví dụ \texttt{Qwen-72B}) và mô hình Trò (\texttt{Qwen-7B}) đều thuộc cùng một họ mô hình (có chung bộ Tokenizer và bảng từ vựng $\mathcal{V}$) và bạn tự chạy được mô hình Thầy trên GPU của mình, việc chỉ cho Trò học mỗi chữ cái chiến thắng của Thầy (Cấp độ 1) là một sự lãng phí khủng khiếp!
+
+Theo bài báo kinh điển của \textbf{Geoffrey Hinton} \citep{hinton2015distilling}, phần thông tin quý giá nhất của mô hình Thầy không nằm ở việc nó chọn từ nào có xác suất cao nhất, mà nằm ở \textbf{tỷ lệ xác suất tương đối giữa các từ không được chọn} --- thứ mà Hinton gọi là \textbf{Tri thức Tối (Dark Knowledge)}.
+
+Tại mỗi vị trí token $t$, gọi vector điểm thô (logits) trước Softmax của Thầy là $\mathbf{z}^{(T)}_t \in \mathbb{R}^{|\mathcal{V}|}$ và của Trò là $\mathbf{z}^{(S)}_t \in \mathbb{R}^{|\mathcal{V}|}$. Ta làm mềm hai phân phối này bằng một \textbf{Nhiệt độ $\tau \ge 1$ (Temperature)}:
+\begin{equation}
+  P_T^{(\tau)}(v \mid x, y_{<t}) = \frac{\exp(z^{(T)}_{t, v} / \tau)}{\sum_{w \in \mathcal{V}} \exp(z^{(T)}_{t, w} / \tau)}, \qquad
+  \pi_\theta^{(\tau)}(v \mid x, y_{<t}) = \frac{\exp(z^{(S)}_{t, v} / \tau)}{\sum_{w \in \mathcal{V}} \exp(z^{(S)}_{t, w} / \tau)}
+  \label{eq:soft_targets}
+\end{equation}
+Hàm mất mát Chưng cất Logit giảm thiểu độ phân kỳ KL giữa hai phân phối mềm này (nhân với $\tau^2$ để giữ nguyên biên độ đạo hàm khi $\tau$ lớn) \citep{hinton2015distilling}:
+\begin{equation}
+  \mathcal{L}_{\text{KD}}(\theta) = \tau^2 \, D_{\text{KL}}\Big( P_T^{(\tau)}(\cdot \mid x, y_{<t}) \,\Big\|\, \pi_\theta^{(\tau)}(\cdot \mid x, y_{<t}) \Big)
+  \label{eq:logit_kd_loss}
+\end{equation}
+
+\begin{mathdecode}[Tại sao Nhiệt độ $\tau > 1$ lại làm lộ ra ``Tri thức Tối''?]
+Giả sử câu văn đang viết dở là: \textit{``Con mèo đang nằm ngủ trên...''} và xét 3 từ trong từ vựng: \texttt{``thảm''}, \texttt{``ghế''}, và \texttt{``đám\_mây''}.
+Mô hình Thầy tính ra điểm thô (logits) cho 3 từ này lần lượt là: $z^{(T)} = [10.0, \; 8.0, \; -10.0]$.
+
+\begin{itemize}
+  \item \textbf{Nếu học SFT thông thường (Nhãn cứng One-hot):} Mô hình Trò chỉ nhận được nhãn $[1, \; 0, \; 0]$. Trong mắt Trò, từ \texttt{``ghế''} và từ \texttt{``đám\_mây''} đều bị coi là sai như nhau (đều bằng $0$)!
+  \item \textbf{Nếu dùng Softmax ở nhiệt độ thấp ($\tau = 0.5$):} Các con số bị đẩy thành $\exp([20, 16, -20])$, sau chuẩn hóa là $[0.982, \; 0.018, \; 10^{-18}]$. Phân phối quá nhọn, gần như không khác gì nhãn cứng.
+  \item \textbf{Nếu nâng Nhiệt độ lên $\tau = 2.0$:} Chia logits cho $2.0$ ta được $[5.0, \; 4.0, \; -5.0]$. Lấy hàm mũ và chuẩn hóa:
+  \begin{equation*}
+    P_T^{(\tau=2.0)} = \big[ \mathbf{0.731} \; (\text{thảm}), \quad \mathbf{0.269} \; (\text{ghế}), \quad \mathbf{0.00003} \; (\text{đám\_mây}) \big]
+  \end{equation*}
+\end{itemize}
+Nhờ $\tau = 2.0$, mô hình Thầy truyền dạy cho mô hình Trò một tri thức ngữ nghĩa cực kỳ sâu sắc trong chỉ 1 bước: \textit{``Từ hợp lý nhất là \texttt{thảm} ($73.1\%$), nhưng \texttt{ghế} ($26.9\%$) cũng là một phương án thay thế rất tự nhiên; còn \texttt{đám\_mây} ($0.003\%$) là hoàn toàn vô lý về mặt vật lý!''}
+\end{mathdecode}
+
+\subsection{Cấp độ 3: Forward KL vs.~Reverse KL và Chưng cất On-Policy (\texttt{MiniLLM} / \texttt{GKD})}
+
+Khi áp dụng công thức Chưng cất Logit~\eqref{eq:logit_kd_loss} cho các mô hình ngôn ngữ sinh văn bản (Generative LLMs), các nhà nghiên cứu tại Microsoft \& Tsinghua (\textbf{MiniLLM} \citealt{gu2024minillm}) và Google DeepMind (\textbf{GKD --- Generalized Knowledge Distillation} \citealt{agarwal2024onpolicy}) đã phát hiện ra hai sai lầm kinh điển của phương pháp chưng cất truyền thống:
+
+\subsubsection{Sai lầm 1: Dùng Forward KL khiến mô hình nhỏ bị ``Bắt cá hai tay'' (Mean-Seeking)}
+
+Độ phân kỳ Kullback-Leibler không có tính đối xứng: $D_{\text{KL}}(P_T \parallel \pi_\theta) \neq D_{\text{KL}}(\pi_\theta \parallel P_T)$.
+\begin{itemize}
+  \item \textbf{Forward KL (Chuẩn truyền thống):} $D_{\text{KL}}(P_T \parallel \pi_\theta) = \sum_{y} P_T(y \mid x) \log \frac{P_T(y \mid x)}{\pi_\theta(y \mid x)}$.
+  Hãy nhìn vào công thức này: bất cứ chỗ nào mô hình Thầy gán xác suất $P_T(y \mid x) > 0$, mô hình Trò \textbf{bắt buộc phải gán $\pi_\theta(y \mid x) > 0$} (vì nếu $\pi_\theta(y \mid x) \to 0$, thì $\log \frac{P_T}{0} \to +\infty$ làm nổ hàm mất mát!).
+  Với một câu hỏi mở, mô hình Thầy 671B rất uyên bác nên nó biết tới 10 cách trả lời đúng khác nhau (phân phối có 10 đỉnh --- 10 modes). Mô hình Trò 7B có dung lượng quá nhỏ không thể nhớ hết cả 10 cách, nhưng bị Forward KL ép phải phủ hết cả 10 đỉnh! Kết quả là mô hình Trò phải kéo giãn phân phối của nó ra nằm chính giữa các đỉnh (\textbf{Zero-avoiding / Mean-seeking}) --- tức là nó gán xác suất cao vào đúng vùng thung lũng \textbf{giữa các câu đúng} (nơi mà $P_T = 0$, đồng nghĩa với việc sinh ra câu trả lời nửa nạc nửa mỡ, bịa đặt!).
+  \item \textbf{Reverse KL (Đảo ngược chiều KL --- Chuẩn \texttt{MiniLLM} \citealt{gu2024minillm}):}
+  \begin{equation}
+    D_{\text{KL}}(\pi_\theta \parallel P_T) = \sum_{y} \pi_\theta(y \mid x) \log \frac{\pi_\theta(y \mid x)}{P_T(y \mid x)}
+    \label{eq:reverse_kl_distill}
+  \end{equation}
+  Với Reverse KL, nếu tại một câu trả lời $y$ nào đó mô hình Thầy gán $P_T(y \mid x) = 0$ (câu sai), mô hình Trò bắt buộc phải gán $\pi_\theta(y \mid x) = 0$ để không bị phạt vô cực. Ngược lại, trong số 10 cách trả lời đúng của Thầy, nếu Trò chỉ chọn học thật xuất sắc \textbf{1 cách duy nhất} và bỏ qua 9 cách còn lại ($\pi_\theta = 0$ ở 9 đỉnh kia), thì $0 \log(0/P_T) = 0$ --- Trò hoàn toàn không bị phạt! Đặc tính này gọi là \textbf{Mode-seeking (Tập trung vào một đỉnh chất lượng cao)}, giúp mô hình nhỏ trả lời cực kỳ sắc bén và không bị ảo giác!
+\end{itemize}
+
+\subsubsection{Sai lầm 2: Chỉ học trên câu của Thầy mà không sửa lỗi trên câu của Trò (On-Policy GKD)}
+
+Trong chưng cất tĩnh (Offline Distillation), ta chỉ tính KL trên các câu văn do Thầy viết sẵn. Giống hệt bệnh Exposure Bias của SFT (Chương~\ref{ch:rl_ppo}), khi Trò tự viết văn lúc chạy thực tế và lỡ bước chệch hướng, nó không biết phải quay lại như thế nào.
+
+Giải pháp \textbf{On-Policy GKD (Generalized Knowledge Distillation)} của Google DeepMind \citep{agarwal2024onpolicy} đảo ngược quy trình:
+\begin{enumerate}
+  \item Cho chính \textbf{mô hình Trò $\pi_\theta$ tự sinh ra câu trả lời} $y \sim \pi_\theta(\cdot \mid x)$ (On-policy rollout).
+  \item Đưa câu trả lời $y$ mà Trò vừa tự viết sang cho mô hình Thầy $P_T$ đọc (chỉ tốn 1 lượt Forward pass cực nhanh của Thầy, không cần Thầy phải sinh văn bản!).
+  \item Tại từng vị trí token $t$ trên chính câu văn của Trò, Thầy đưa ra phân phối xác suất chuẩn $P_T(\cdot \mid x, y_{<t})$ để dạy cho Trò biết: \textit{``Tại đúng cái chỗ mà em vừa viết nhầm này, lẽ ra từ tiếp theo em phải chọn là từ này mới đúng!''}
+\end{enumerate}
+
+% =========================================================================
+\section{Hợp nhất Mô hình (Model Merging): ``Hợp thể'' Đa kỹ năng Không cần GPU}
+\label{sec:model_merging}
+
+Hãy tưởng tượng một tình huống rất phổ biến tại các công ty AI Việt Nam:
+\begin{itemize}
+  \item Nhóm A lấy mô hình nền \texttt{Qwen2.5-7B-Base} đi huấn luyện trên dữ liệu tiếng Việt, tạo ra mô hình $\theta_{\text{VN}}$ rất giỏi văn phong Việt Nam.
+  \item Nhóm B cũng lấy đúng mô hình nền \texttt{Qwen2.5-7B-Base} đó đi huấn luyện trên dữ liệu lập trình, tạo ra mô hình $\theta_{\text{Code}}$ rất giỏi viết Python/SQL.
+  \item Nhóm C lại lấy \texttt{Qwen2.5-7B-Base} đi huấn luyện giải Toán, tạo ra $\theta_{\text{Math}}$.
+\end{itemize}
+Bây giờ Giám đốc Sản phẩm yêu cầu một mô hình duy nhất vừa giỏi Tiếng Việt, vừa giỏi Code, vừa giỏi Toán. Chẳng lẽ bạn phải trộn lại toàn bộ 3 tập dữ liệu và thuê cụm GPU huấn luyện lại từ đầu tốn hàng chục nghìn USD?
+
+Câu trả lời của giai đoạn 2024--2026 là \textbf{KHÔNG CẦN}! Bạn có thể gộp trực tiếp ma trận trọng số của cả 3 mô hình trên CPU chỉ trong vòng 2 phút bằng kỹ thuật \textbf{Model Merging}.
+
+\subsection{Vector Tác vụ (Task Vectors) và Tại sao Cộng Trung bình Ngây thơ lại Thất bại?}
+
+Vì cả $K$ mô hình chuyên biệt $\theta_1, \theta_2, \dots, \theta_K$ đều xuất phát từ cùng một mô hình gốc $\theta_{\text{base}}$, chúng nằm trong cùng một bồn trũng không gian tham số (Linear Mode Connectivity). Ta định nghĩa \textbf{Vector tác vụ (Task Vector / Delta Parameter)} $\tau_k$ của mô hình thứ $k$ là phần độ lệch trọng số mà nó đã học thêm được so với mô hình gốc:
+\begin{equation}
+  \tau_k = \theta_k - \theta_{\text{base}} \quad \text{với } k \in \{1, \dots, K\}
+  \label{eq:task_vector}
+\end{equation}
+
+Cách gộp ngây thơ nhất (Task Arithmetic / Linear Averaging) là cộng trung bình các vector tác vụ này lại: $\theta_{\text{merged}} = \theta_{\text{base}} + \frac{1}{K}\sum_{k=1}^K \tau_k$. Tuy nhiên, khi cộng trực tiếp như vậy, điểm số của mô hình gộp thường bị tụt giảm nghiêm trọng so với từng mô hình thành phần. Tại sao?
+
+Nghiên cứu đột phá tại NeurIPS 2023 của \citet{yadav2023ties} đã chỉ ra \textbf{2 nguyên nhân gây nhiễu tham số (Parameter Interference)}:
+\begin{enumerate}
+  \item \textbf{Nhiễu từ 80\%--90\% các tham số dư thừa (Redundant Parameters):} Khi Fine-tune một mô hình 7 tỷ tham số, thực chất chỉ có khoảng $10\% - 20\%$ các trọng số thay đổi mạnh là mang tri thức cốt lõi của tác vụ mới; $80\%$ trọng số còn lại chỉ dao động nhẹ quanh số $0$ (nhiễu ngẫu nhiên do SGD). Khi cộng trung bình nhiều mô hình, đám nhiễu 80\% này chồng lấn lên nhau và làm loãng đi 20\% trọng số quan trọng của mô hình kia!
+  \item \textbf{Xung đột Dấu (Sign Disagreement):} Tại cùng một vị trí trọng số thứ $i$, mô hình Tiếng Việt muốn tăng nó lên ($\tau_{1,i} = +0.05$) nhưng mô hình Code lại muốn giảm nó xuống ($\tau_{2,i} = -0.04$). Khi cộng lại, chúng triệt tiêu nhau về $0.005$, làm hỏng cả hai kỹ năng!
+\end{enumerate}
+
+\subsection{Giải pháp 1: TIES-Merging (Trim, Elect Sign, \& Merge) \citep{yadav2023ties}}
+
+Để giải quyết triệt để hai xung đột trên, thuật toán \textbf{TIES-Merging} \citep{yadav2023ties} thực hiện quy trình 3 bước cực kỳ gọn gàng trên các vector tác vụ $\tau_k = \theta_k - \theta_{\text{base}}$:
+
+\begin{enumerate}
+  \item \textbf{Bước 1 --- TRIM (Cắt tỉa nhiễu):} Với mỗi vector tác vụ $\tau_k$, chỉ giữ lại top-$p\%$ (thường chọn $20\%$) các phần tử có độ lớn tuyệt đối $|\tau_{k,i}|$ lớn nhất; toàn bộ $80\%$ phần tử nhỏ còn lại bị gán thẳng về $0$, thu được vector thưa $\hat{\tau}_k$.
+  \item \textbf{Bước 2 --- ELECT SIGN (Bầu cử chọn Dấu chung cuộc):} Tại mỗi vị trí trọng số thứ $i$, tính tổng toàn bộ các giá trị $\sum_{k=1}^K \hat{\tau}_{k,i}$. Nếu tổng này dương, dấu chiến thắng chung cuộc tại vị trí $i$ là $\gamma_i = +1$; nếu tổng âm, dấu chiến thắng là $\gamma_i = -1$:
+  \begin{equation}
+    \gamma_i = \text{sign}\left( \sum_{k=1}^{K} \hat{\tau}_{k, i} \right)
+  \end{equation}
+  \item \textbf{Bước 3 --- DISJOINT MERGE (Cộng trung bình không xung đột):} Tại vị trí thứ $i$, loại bỏ toàn bộ những mô hình nào có dấu ngược với dấu chiến thắng $\gamma_i$, rồi chỉ tính trung bình cộng trên tập các mô hình cùng phe $\mathcal{A}_i = \{k \mid \text{sign}(\hat{\tau}_{k,i}) = \gamma_i\}$:
+  \begin{equation}
+    \tau_{\text{TIES}, i} = \frac{1}{|\mathcal{A}_i|} \sum_{k \in \mathcal{A}_i} \hat{\tau}_{k, i}, \qquad \theta_{\text{merged}} = \theta_{\text{base}} + \lambda \, \tau_{\text{TIES}}
+    \label{eq:ties_merge}
+  \end{equation}
+\end{enumerate}
+
+\begin{mathdecode}[Chạy thử bằng tay thuật toán TIES-Merging trên 3 trọng số]
+Giả sử ta gộp 3 mô hình ($\tau_1, \tau_2, \tau_3$) tại một trọng số $i$ duy nhất sau bước Trim:
+\begin{equation*}
+  \hat{\tau}_{1, i} = +0.06, \qquad \hat{\tau}_{2, i} = +0.04, \qquad \hat{\tau}_{3, i} = -0.05
+\end{equation*}
+\begin{itemize}
+  \item \textbf{Nếu cộng trung bình ngây thơ:} $\frac{+0.06 + 0.04 - 0.05}{3} = \frac{+0.05}{3} = \mathbf{+0.0167}$ (tín hiệu bị kéo tụt thê thảm xuống gần $0$ do mô hình 3 kéo ngược chiều!).
+  \item \textbf{Nếu dùng TIES-Merging:}
+  \begin{enumerate}
+    \item \textit{Bầu cử dấu:} Tổng khối lượng phe Dương là $+0.06 + 0.04 = +0.10$; phe Âm là $-0.05$. Tổng chung cuộc $= +0.05 > 0 \implies$ Phe Dương thắng cử ($\gamma_i = +1$).
+    \item \textit{Cộng cùng phe:} Loại bỏ $\hat{\tau}_{3,i} = -0.05$ vì ngược dấu. Chỉ tính trung bình trên tập cùng phe Dương $\mathcal{A}_i = \{1, 2\}$:
+    \begin{equation*}
+      \tau_{\text{TIES}, i} = \frac{+0.06 + 0.04}{2} = \mathbf{+0.050}
+    \end{equation*}
+  \end{enumerate}
+\end{itemize}
+Cường độ tín hiệu $+0.050$ được bảo toàn nguyên vẹn, cao gấp 3 lần so với cách cộng ngây thơ!
+\end{mathdecode}
+
+\subsection{Giải pháp 2: DARE (Drop And REscale) \citep{yu2024language}}
+
+Năm 2024, nhóm nghiên cứu của \citet{yu2024language} tại ICML 2024 đã công bố một phát hiện còn gây kinh ngạc hơn nữa mang tên \textbf{DARE (Drop And REscale)}:
+
+Trong các mô hình ngôn ngữ lớn đã qua SFT, các vector độ lệch $\tau_k = \theta_k - \theta_{\text{base}}$ có mức độ dư thừa cực đoan đến mức: bạn có thể \textbf{xóa ngẫu nhiên tới 90\%--99\% các phần tử của $\tau_k$ về $0$}, miễn là bạn \textbf{nhân bù (Rescale)} $10\%$ phần tử sống sót còn lại với hệ số $\frac{1}{1 - p}$ (tức là nhân gấp $10$ lần khi xóa $p = 0.9$), thì năng lực của mô hình gần như \textbf{không suy giảm một chút nào}!
+
+\begin{equation}
+  m_{k, i} \sim \text{Bernoulli}(1 - p), \qquad \tilde{\tau}_{k, i} = \frac{m_{k, i} \cdot \tau_{k, i}}{1 - p}
+  \label{eq:dare_formula}
+\end{equation}
+
+\begin{mentalmodel}[Tại sao xóa 90\% rồi nhân 10 phần còn lại của DARE lại hoạt động kỳ diệu?]
+Hãy nhớ lại cách một lớp Linear trong mạng nơ-ron hoạt động: đầu ra là tổng tích vô hướng $y = \sum_{i=1}^{d} (\theta_{\text{base}, i} + \tau_i) x_i = \sum \theta_{\text{base}, i} x_i + \sum_{i=1}^{d} \tau_i x_i$.
+Vì chiều ẩn $d$ của LLM rất lớn ($d = 4{,}096$ hoặc $8{,}192$), theo Luật Số Lớn trong xác suất, khi bạn giữ lại ngẫu nhiên $10\%$ các số hạng trong tổng $\sum_{i=1}^{4096} \tau_i x_i$ rồi nhân mỗi số hạng sống sót lên $10$ lần, \textbf{giá trị kỳ vọng của tổng đầu ra hoàn toàn không đổi}:
+\begin{equation*}
+  \mathbb{E}\left[ \sum_{i=1}^{d} \tilde{\tau}_i x_i \right] = \sum_{i=1}^{d} \mathbb{E}\left[\frac{m_i}{1 - p}\right] \tau_i x_i = \sum_{i=1}^{d} \frac{1 - p}{1 - p} \tau_i x_i = \sum_{i=1}^{d} \tau_i x_i
+\end{equation*}
+Nhưng điều tuyệt vời nhất xảy ra khi bạn mang hai mô hình đã qua DARE (mỗi mô hình đã xóa trống 90\% vị trí) đi gộp vào nhau: xác suất để hai phần tử khác $0$ của hai mô hình đâm sầm vào cùng một vị trí chỉ còn là $0.1 \times 0.1 = \mathbf{1\%}$! $99\%$ các vị trí trên ma trận hoàn toàn không hề va chạm nhau!
+\end{mentalmodel}
+
+Trong thực tế năm 2025--2026, tổ hợp mạnh nhất trên thư viện mã nguồn mở \texttt{mergekit} chính là \textbf{DARE-TIES}: dùng DARE để làm thưa và nhân bù các vector tác vụ trước, sau đó dùng quy tắc bầu cử dấu của TIES để xử lý $1\%$ các vị trí va chạm còn lại!

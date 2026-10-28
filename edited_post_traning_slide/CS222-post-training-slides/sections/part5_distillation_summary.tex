@@ -1,0 +1,338 @@
+% ============================================================================
+% PHẦN 5: Knowledge Distillation, KHÔNG GIAN THAM SỐ & TỔNG KẾT HỆ THỐNG
+% ============================================================================
+\sectionintro{5}{Knowledge Distillation}{2025--2026}{Chuyển giao năng lực Teacher-Student, Forward/Reverse KL và tổng kết.}
+
+\subsection{5.1. Knowledge Distillation từ Teacher sang Student Model}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG QUAN PHẦN 5.1 — KHUNG TEACHER-STUDENT
+% ----------------------------------------------------------------------------
+\begin{frame}{Knowledge Distillation: Teacher và Student}
+  \lead{Chuyển năng lực từ mô hình Frontier sang mô hình nhỏ, vượt điểm nghẽn của RL.}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{6pt}
+    \item \textbf{Logit Distillation (White-box KD):}\\
+      Khớp phân phối xác suất mềm $P_T^{(\tau)}$ trên toàn bộ từ vựng $\mathcal{V}$ tại từng bước token.
+    \item \textbf{Sequence-Level Distillation (Black-box KD):}\\
+      Huấn luyện hợp lý logarit trên toàn bộ câu trả lời hoàn chỉnh $y_T \sim \pi_T$.
+    \item \textbf{Rationale Distillation (Reasoning KD):}\\
+      Chuyển giao đồng thời chuỗi suy luận \texttt{<think>} $z_T$ và đáp số $y_T$ đã kiểm chứng.
+  \end{enumerate}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: ĐỐI CHỨNG THỰC NGHIỆM: DISTILLATION VS TỰ CHẠY RL
+% ----------------------------------------------------------------------------
+\begin{frame}{Distillation và tự chạy RL: đối chứng thực nghiệm}
+  \lead{Kết quả thực nghiệm trên Qwen-32B-Base (DeepSeek-AI, 2025).}
+  \vspace{0.06cm}
+  \small
+  \renewcommand{\arraystretch}{1.20}
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X c c >{\raggedright\arraybackslash}X@{}}
+    \toprule
+    \textbf{Phương pháp trên Qwen-32B} & \textbf{AIME 2024} & \textbf{MATH-500} & \textbf{Cơ chế} \\
+    \midrule
+    \textbf{Tự chạy RL (Zero-RL / GRPO)} & $47.0\%$ & $83.9\%$ & Giới hạn bởi dung lượng khám phá của 32B \\
+    \textbf{Distillation từ DeepSeek-R1 671B} & \textbf{\textcolor{tealgreen}{72.6\%}} & \textbf{\textcolor{tealgreen}{94.3\%}} & Kế thừa trực tiếp quỹ đạo của Teacher 671B \\
+    \bottomrule
+  \end{tabularx}
+
+  \vspace{0.15cm}
+  \takeaway{Dùng \textbf{Online RL} trên Frontier để \textbf{khám phá tri thức mới}; dùng \textbf{Distillation} để \textbf{nén} xuống mô hình nhỏ.}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ 3 PHƯƠNG THỨC DISTILLATION
+% ----------------------------------------------------------------------------
+\begin{frame}{Ba phương thức Knowledge Distillation}
+  \lead{Luồng tín hiệu huấn luyện trong Distillation hộp trắng và hộp đen.}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}
+        \node[frozenmodel, text width=3.3cm, minimum height=2.9cm, fill=softblue, draw=navyblue, line width=1.1pt] (teacher) at (0, 0) {
+          \textbf{Teacher Model $\pi_T$}\\
+          (Frontier Teacher)\\[6pt]
+          \normalfont\scriptsize Đã qua Pre-training,\\
+          SFT \& RL (GRPO)\\
+          (Ví dụ: 671B tham số)
+        };
+
+        \node[rewardbox, text width=5.6cm, minimum height=1.05cm] (k1) at (6.4, 1.5) {
+          \textbf{1. Logit Distillation (White-box KD)}\\
+          \normalfont\scriptsize Chuyển giao Soft Targets $P_T^{(\tau)}(v \mid x, y_{<t})$ trên toàn bộ từ điển $\mathcal{V}$
+        };
+
+        \node[data, text width=5.6cm, minimum height=1.05cm] (k2) at (6.4, 0) {
+          \textbf{2. Sequence-Level Distillation (Black-box KD)}\\
+          \normalfont\scriptsize Chuyển giao phản hồi hoàn chỉnh $y_T \sim \pi_T(\cdot \mid x)$ làm chuỗi mục tiêu
+        };
+
+        \node[lossbox, text width=5.6cm, minimum height=1.05cm, fill=softgreen, draw=tealgreen] (k3) at (6.4, -1.5) {
+          \textbf{3. Rationale Distillation (Reasoning KD)}\\
+          \normalfont\scriptsize Chuyển giao đồng thời chuỗi suy luận $z_T$ (\texttt{<think>}) và đáp án $y_T$ đã kiểm chứng
+        };
+
+        \node[trainmodel, text width=3.3cm, minimum height=2.9cm] (student) at (12.8, 0) {
+          \textbf{Student Model $\pi_S$}\\
+          \normalfont\scriptsize Dung lượng nhỏ gọn,\\
+          tối ưu hóa độ trễ\\
+          (Ví dụ: 1.5B -- 32B)
+        };
+
+        \coordinate (bus_left) at (2.4, 0);
+        \draw[line width=1.05pt, draw=navyblue!85!black] (teacher.east) -- (bus_left);
+        \draw[flow] (bus_left) |- (k1.west);
+        \draw[flow] (bus_left) -- (k2.west);
+        \draw[flow] (bus_left) |- (k3.west);
+
+        \coordinate (bus_right) at (10.4, 0);
+        \draw[flow] (k1.east) -| (bus_right);
+        \draw[flow] (k2.east) -- (bus_right);
+        \draw[flow] (k3.east) -| (bus_right);
+        \draw[flow] (bus_right) -- (student.west);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: FORWARD KL (MODE COVERING)
+% ----------------------------------------------------------------------------
+\begin{frame}{Forward KL trong Distillation: Mode Covering}
+  \lead{Mục tiêu tối ưu hóa truyền thống trong học có giám sát và Maximum Likelihood.}
+  \begin{block}{Hàm mất mát Forward KL}
+    \[
+      \fitmath{%
+      \DKL(\pi_T \parallel \pi_S) = \E_{y \sim \pi_T} \left[ \log \frac{\pi_T(y \mid x)}{\pi_S(y \mid x)} \right]
+      }
+    \]
+  \end{block}
+
+  \subhead{Đặc tính Zero-Avoiding}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Cơ chế phạt:} Phạt rất nặng khi $\pi_T(y) > 0$ nhưng $\pi_S(y) \approx 0$ (do $\frac{\pi_T}{\pi_S} \to +\infty$).
+    \item \textbf{Hành vi phân phối:} Ép Student $\pi_S$ phải bao phủ \textbf{tất cả các Mode} của Teacher.
+    \item \textbf{Hạn chế:} Mô hình nhỏ dễ bị mờ phân phối (Over-generalization / Fuzzy distribution).
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: REVERSE KL (MODE SEEKING)
+% ----------------------------------------------------------------------------
+\begin{frame}{Reverse KL trong Distillation: Mode Seeking}
+  \lead{Mục tiêu định hướng Student tập trung vào các chế độ phản hồi có độ tin cậy cao nhất.}
+  \begin{block}{Hàm mất mát Reverse KL}
+    \[
+      \fitmath{%
+      \DKL(\pi_S \parallel \pi_T) = \E_{y \sim \pi_S} \left[ \log \frac{\pi_S(y \mid x)}{\pi_T(y \mid x)} \right]
+      }
+    \]
+  \end{block}
+
+  \subhead{Đặc tính Zero-Forcing}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Cơ chế phạt:} Phạt nặng nếu Student sinh mẫu tại nơi Teacher gán xác suất thấp ($\pi_T(y) \approx 0$).
+    \item \textbf{Tập trung đỉnh xác suất:} Ép Student mô phỏng các \textbf{Mode chính xác nhất} của Teacher.
+    \item \textbf{Ưu thế trong suy luận:} Giúp mô hình nhỏ hội tụ vào đường giải đúng duy nhất trong Toán/Code.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: QUY TRÌNH HAI GIAI ĐOẠN CHO MÔ HÌNH NHỎ
+% ----------------------------------------------------------------------------
+\begin{frame}{Quy trình hai giai đoạn cho mô hình nhỏ}
+  \lead{Kết hợp Distillation và Online RL để tối ưu hiệu năng toàn diện.}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{6pt}
+    \item \textbf{Giai đoạn 1: Rationale Distillation (Cold-start CoT):}\\
+      SFT trên $800{,}000$ mẫu chuỗi \texttt{<think>} từ Teacher 671B để nạp tư duy ban đầu.
+    \item \textbf{Giai đoạn 2: Lightweight RL (Khử Exposure Bias):}\\
+      Chạy GRPO trên tập kiểm chứng toán học để tự sửa sai và tối ưu phân phối.
+  \end{enumerate}
+
+  \vspace{0.15cm}
+  \takeaway{Distillation cung cấp bàn đạp khởi động; Online RL giúp tự khám phá và hoàn thiện.}
+  \par\vspace{0pt}
+\end{frame}
+
+\subsection{5.2. Hiệu chỉnh Tham số \& Đánh giá Hệ thống Post-training}
+
+% ----------------------------------------------------------------------------
+% SLIDE: LORA
+% ----------------------------------------------------------------------------
+\begin{frame}{Hiệu chỉnh tham số: LoRA}
+  \lead{Nén không gian tham số cập nhật qua tích hai ma trận hạng thấp (Hu et al., 2021).}
+  \begin{block}{Công thức phân rã ma trận cập nhật}
+    \[
+      \fitmath{%
+      W = W_0 + \Delta W = W_0 + \frac{\alpha}{r} B A, \qquad B \in \mathbb{R}^{d \times r}, \; A \in \mathbb{R}^{r \times k} \; (r \ll \min(d, k))
+      }
+    \]
+  \end{block}
+
+  \subhead{Nguyên lý tối ưu hóa tài nguyên}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Đóng băng trọng số gốc:} Cố định $W_0$, chỉ tối ưu hóa $A$ và $B$.
+    \item \textbf{Tiết kiệm bộ nhớ:} Giảm $>90\%$ VRAM lưu trữ gradient và trạng thái optimizer.
+    \item \textbf{Zero Inference Latency:} Cộng gộp trực tiếp $\Delta W$ vào $W_0$ khi triển khai suy diễn.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: PHÂN LOẠI BENCHMARK
+% ----------------------------------------------------------------------------
+\begin{frame}{Đánh giá hệ thống: Phân loại Benchmark}
+  \lead{Hai trục đánh giá chính: Kiểm chứng tất định và Sở thích con người.}
+  \subhead{1. Tác vụ suy luận \& lập trình (Deterministic / Verifiable)}
+  \small
+  \begin{itemize}\setlength{\itemsep}{2pt}
+    \item \textbf{Toán học:} GSM8K, MATH-500, AIME 2024 (chấm bằng symbolic parser).
+    \item \textbf{Lập trình:} HumanEval, LiveCodeBench (chấm qua test cases \texttt{pass@1}).
+  \end{itemize}
+
+  \vspace{0.12cm}
+  \subhead{2. Tác vụ mở \& hội thoại đa năng (Open-ended / Preference)}
+  \small
+  \begin{itemize}\setlength{\itemsep}{2pt}
+    \item \textbf{Tập kiểm thử:} MT-Bench, AlpacaEval 2.0, LMSYS Chatbot Arena.
+    \item \textbf{Thước đo:} Tỷ lệ thắng (Win Rate) theo đánh giá con người hoặc LLM-as-a-Judge.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: LLM-AS-A-JUDGE
+% ----------------------------------------------------------------------------
+\begin{frame}{Đánh giá bằng LLM-as-a-Judge}
+  \lead{Sử dụng mô hình ngôn ngữ làm giám khảo đánh giá và các thiên kiến đo lường (Zheng et al., 2023).}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{5pt}
+    \item \textbf{Position Bias (Thiên vị vị trí):}\\
+      Ưa chuộng đáp án đứng trước $\implies$ Hoán vị cặp $(A, B)$ và $(B, A)$.
+    \item \textbf{Verbosity Bias (Thiên vị độ dài):}\\
+      Ưa chuộng câu dài dù nội dung tương đương $\implies$ Dùng Length-Controlled Win Rate.
+    \item \textbf{Self-Enhancement Bias (Thiên vị tự thân):}\\
+      Chấm điểm cao cho cùng họ mô hình $\implies$ Dùng hội đồng đa giám khảo (Multi-judge).
+  \end{enumerate}
+  \par\vspace{0pt}
+\end{frame}
+
+\subsection{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}
+
+% ----------------------------------------------------------------------------
+% SLIDE: BẢN ĐỒ 3 TẦNG KHÁI NIỆM (TIKZ)
+% ----------------------------------------------------------------------------
+\begin{frame}{Ba tầng khái niệm trong Post-training}
+  \lead{Nguồn phản hồi, độ mịn Credit Assignment và thuật toán tối ưu hóa.}
+  \vspace{0.1cm}
+  \begin{center}
+    \resizebox{0.95\textwidth}{!}{%
+      \begin{tikzpicture}[
+        layer/.style={rectangle, rounded corners=2pt, draw=navyblue, text=white, text width=3.3cm, minimum height=1.25cm, align=center, font=\scriptsize\rmfamily\bfseries},
+        item/.style={rectangle, rounded corners=2pt, draw=tealgreen!85!black, line width=0.9pt, fill=softgreen, text width=3.5cm, minimum height=1.25cm, align=center, font=\scriptsize\rmfamily}
+      ]
+        \node[layer, fill=navyblue] (L1) at (0, 1.65) {TẦNG 1: Nguồn phát\\Tín hiệu phản hồi\\(Feedback Source)};
+        \node[item] (L1a) at (4.1, 1.65) {\textbf{RLHF (Phần 2)}\\Đánh giá từ Con người\\(Cặp đối chiếu $y_w \succ y_l$)};
+        \node[item] (L1b) at (8.1, 1.65) {\textbf{RLAIF (Phần 3)}\\Đánh giá từ Mô hình AI\\(Hiến pháp / Quy tắc)};
+        \node[item, fill=softyellow, draw=amberorange!90!black] (L1c) at (12.1, 1.65) {\textbf{RLVR (Phần 4)}\\Deterministic Verifier\\(Toán học / Trình biên dịch)};
+
+        \node[layer, fill=tealgreen] (L2) at (0, 0) {TẦNG 2: Độ Mịn\\Credit Assignment\\(Credit Granularity)};
+        \node[item, text width=5.5cm] (L2a) at (5.1, 0) {\textbf{ORM (Outcome Reward Model)}\\Cấp phát phần thưởng duy nhất ở cuối chuỗi phản hồi};
+        \node[item, text width=5.5cm] (L2b) at (11.1, 0) {\textbf{PRM (Process Reward Model)}\\Cấp phát phần thưởng chi tiết sau từng bước suy luận trung gian};
+
+        \node[layer, fill=stanfordred] (L3) at (0, -1.65) {TẦNG 3: Giải thuật\\Tối ưu hóa tham số\\(Optimization Algorithm)};
+        \node[item, fill=softred, draw=stanfordred] (L3a) at (4.1, -1.65) {\textbf{PPO (Phần 2)}\\Online RL có Value Network $V_\psi$\\(Hệ thống 4 mô hình)};
+        \node[item, fill=softred, draw=stanfordred] (L3b) at (8.1, -1.65) {\textbf{DPO (Phần 3)}\\Tối ưu hóa trực tiếp từ cặp tĩnh\\(Closed-form Solution)};
+        \node[item, fill=softred, draw=stanfordred] (L3c) at (12.1, -1.65) {\textbf{GRPO (Phần 4)}\\Online RL chuẩn hóa nhóm $G$\\(Loại bỏ Value Network)};
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.05cm}
+  \small
+  \textbf{Tổ hợp kiến trúc điển hình:} \textit{InstructGPT (2022)} = \textbf{RLHF} + \textbf{ORM} + \textbf{PPO}. \quad $|$ \quad \textit{DeepSeek-R1 (2025)} = \textbf{RLVR} + \textbf{ORM} + \textbf{GRPO}.
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: SƠ ĐỒ CHUỖI TIẾN HÓA (TIKZ)
+% ----------------------------------------------------------------------------
+\begin{frame}{Chuỗi tiến hóa phương pháp (2020--2026)}
+  \lead{Giới hạn của phương pháp trước là động cơ của phương pháp tiếp theo.}
+  \vspace{0.15cm}
+  \begin{center}
+    \resizebox{0.96\textwidth}{!}{%
+      \begin{tikzpicture}[
+        method/.style={rectangle, rounded corners=2pt, draw=navyblue, line width=1.05pt, fill=softblue, text width=2.9cm, minimum height=1.2cm, align=center, font=\scriptsize\rmfamily\bfseries},
+        limit/.style={rectangle, rounded corners=2pt, draw=stanfordred, line width=0.9pt, fill=softred, text width=3.0cm, minimum height=1.1cm, align=center, font=\tiny\rmfamily}
+      ]
+        \node[method] (pre) at (0, 1.65) {2020: Pre-training\\$\mathcal{L}_{\text{MLE}}(u_t \mid u_{<t})$};
+        \node[limit] (lim1) at (3.6, 1.65) {\textbf{Giới hạn:}\\Objective Mismatch với tác vụ\\tuân thủ chỉ thị};
+        \node[method] (sft) at (7.2, 1.65) {Phần 1: SFT (2021)\\$\mathcal{L}_{\text{SFT}}(y^* \mid x)$};
+        \node[limit] (lim2) at (10.8, 1.65) {\textbf{Giới hạn:}\\Exposure Bias, ảo giác,\\thiếu tín hiệu từ mẫu âm};
+
+        \node[method] (rlhf) at (10.8, 0) {Phần 2: RLHF + PPO\\(2022 -- 4 mô hình)};
+        \node[limit] (lim3) at (7.2, 0) {\textbf{Giới hạn:}\\Chi phí bộ nhớ 4 mạng,\\sinh mẫu chậm, bất ổn định};
+        \node[method, fill=softgreen, draw=tealgreen] (dpo) at (3.6, 0) {Phần 3: DPO (2023)\\(Closed-form khử $Z(x)$)};
+        \node[limit] (lim4) at (0, 0) {\textbf{Giới hạn DPO:}\\Học tĩnh, thất bại ở\\Toán/Code (\textsl{Reward Hacking})};
+
+        \node[method, fill=softyellow, draw=amberorange!90!black] (grpo) at (0, -1.65) {Phần 4: RLVR + GRPO\\(2024--2026: Bỏ Critic $V_\psi$)};
+        \node[limit] (lim5) at (5.4, -1.65) {\textbf{Giới hạn trên Mô hình nhỏ:}\\Cạn kiệt phần thưởng ($\hat{A}_i = 0$),\\gradient triệt tiêu ($\nabla_\theta = \mathbf{0}$)};
+        \node[method, fill=softgreen, draw=tealgreen] (kd) at (10.8, -1.65) {Phần 5: Distillation\\(Logit / Sequence /\\Rationale KD)};
+
+        \draw[flow] (pre.east) -- (lim1.west);
+        \draw[flow] (lim1.east) -- (sft.west);
+        \draw[flow] (sft.east) -- (lim2.west);
+        \draw[flow] (lim2.south) -- (rlhf.north);
+        \draw[flow] (rlhf.west) -- (lim3.east);
+        \draw[flow] (lim3.west) -- (dpo.east);
+        \draw[flow] (dpo.west) -- (lim4.east);
+        \draw[flow] (lim4.south) -- (grpo.north);
+        \draw[flow] (grpo.east) -- (lim5.west);
+        \draw[flow] (lim5.east) -- (kd.west);
+      \end{tikzpicture}%
+    }
+  \end{center}
+  \vspace{0.05cm}
+  \small
+  \textbf{Quy trình tích hợp hiện đại:} \textbf{SFT khởi tạo} $\longrightarrow$ \textbf{RLVR + GRPO khám phá suy luận trên Frontier} $\longrightarrow$ \textbf{DPO căn chỉnh} $\longrightarrow$ \textbf{Distillation nén xuống mô hình nhỏ}.
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: NĂM NGUYÊN LÝ TIẾN HÓA CỦA POST-TRAINING
+% ----------------------------------------------------------------------------
+\begin{frame}{Năm nguyên lý tiến hóa của Post-training}
+  \lead{Tổng kết chặng đường phát triển từ 2020 đến 2026.}
+  \small
+  \begin{enumerate}\setlength{\itemsep}{3pt}
+    \item \textbf{1. SFT (2020):} Học tuân thủ chỉ thị qua MLE; vướng Exposure Bias và thiếu mẫu âm.
+    \item \textbf{2. RLHF (2022):} Căn chỉnh On-policy với mẫu âm; gánh nặng bộ nhớ 4 mô hình.
+    \item \textbf{3. DPO (2023):} Nghiệm đóng khử vòng lặp RL và Critic; giới hạn bởi dữ liệu tĩnh.
+    \item \textbf{4. GRPO (2024):} Chuẩn hóa nhóm khử Critic, kích hoạt tư duy System 2 (\texttt{<think>}).
+    \item \textbf{5. Distillation (2026):} Nén năng lực suy luận từ Frontier xuống mô hình nhỏ.
+  \end{enumerate}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: CẢM ƠN VÀ THẢO LUẬN
+% ----------------------------------------------------------------------------
+\begin{frame}[plain]
+  \begin{center}
+    \vspace{1.5cm}
+    {\LARGE\bfseries\color{refblue}Cảm ơn Quý Thầy Cô\\và các bạn!\par}
+    \vspace{0.6cm}
+    {\large\color{reforange}Thảo luận và hỏi đáp (Q\&A)}
+  \end{center}
+\end{frame}

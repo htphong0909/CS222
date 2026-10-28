@@ -1,0 +1,251 @@
+﻿\chapter{Giải phẫu Toán học Direct Preference Optimization (DPO) \& Các Biến thể}
+\label{chap:dpo}
+
+\begin{pedagogy}
+Chương này dành trọn thời lượng để giải phẫu một trong những đột phá toán học thanh lịch và có tầm ảnh hưởng sâu rộng nhất trong lịch sử Post-training: công trình \textbf{Direct Preference Optimization (DPO)} của nhóm tác giả Stanford \citep{rafailov2023direct}. Người học sẽ được dẫn dắt từng bước biến đổi giải tích để hiểu tại sao ta có thể loại bỏ hoàn toàn Reward Model và vòng lặp PPO, phân tích động lực học của gradient DPO, nhận diện 4 cạm bẫy toán học của DPO gốc và tìm hiểu các biến thể cải tiến hiện đại (\textbf{SimPO}, \textbf{ORPO}, \textbf{IPO}, \textbf{KTO}, \textbf{RPO}).
+\end{pedagogy}
+
+% ============================================================================
+\section{Dẫn xuất Toán học Toàn vẹn của DPO (Rafailov et al., 2023)}
+\label{sec:dpo_derivation}
+
+\textbf{Mục tiêu Toán học:} Giải bài toán cực đại hóa phần thưởng có ràng buộc phân kỳ KL trong RLHF bằng phương pháp giải tích để tìm ra mối liên hệ hàm số tất yếu giữa mô hình phần thưởng tiềm ẩn $r(x, y)$ và chính sách ngôn ngữ $\pi_\theta(y \mid x)$, từ đó thay thế hoàn toàn vòng lặp PPO bằng một hàm mất mát giải tích đơn giản.
+
+\subsection{Bước 1: Tìm Nghiệm Đóng (Closed-form Solution) của Bài toán RL có Ràng buộc KL}
+Xét bài toán tối ưu hóa RLHF tại một câu hỏi $x \sim \mathcal{D}$ với một hàm phần thưởng $r(x, y)$ bất kỳ:
+\begin{equation}
+    \max_{\pi} \E_{y \sim \pi(\cdot \mid x)} \big[ r(x, y) \big] - \beta \DKL\Big(\pi(\cdot \mid x) \parallel \pi_{\text{ref}}(\cdot \mid x)\Big).
+    \label{eq:dpo_start}
+\end{equation}
+
+Viết tường minh định nghĩa của kỳ vọng và phân kỳ KL dưới dạng tổng rời rạc trên toàn bộ không gian chuỗi câu trả lời $y \in V^*$:
+\begin{equation}
+    \max_{\pi} \sum_{y} \pi(y \mid x) r(x, y) - \beta \sum_{y} \pi(y \mid x) \log \frac{\pi(y \mid x)}{\pi_{\text{ref}}(y \mid x)}.
+\end{equation}
+
+Đổi dấu toàn bộ biểu thức (chuyển từ bài toán cực đại hóa $\max$ sang cực tiểu hóa $\min$) và chia cho hằng số dương $\beta > 0$:
+\begin{equation}
+    \min_{\pi} \sum_{y} \pi(y \mid x) \left( \log \frac{\pi(y \mid x)}{\pi_{\text{ref}}(y \mid x)} - \frac{1}{\beta} r(x, y) \right).
+\end{equation}
+
+Sử dụng tính chất logarit $\frac{1}{\beta} r(x, y) = \log \exp\big(\frac{1}{\beta} r(x, y)\big)$ và quy tắc hiệu logarit $\log a - \log b = \log \frac{a}{b}$:
+\begin{equation}
+    \min_{\pi} \sum_{y} \pi(y \mid x) \log \left( \frac{\pi(y \mid x)}{\pi_{\text{ref}}(y \mid x) \exp\big(\frac{1}{\beta} r(x, y)\big)} \right).
+    \label{eq:dpo_unnormalized}
+\end{equation}
+
+Mẫu số $\pi_{\text{ref}}(y \mid x) \exp\big(\frac{1}{\beta} r(x, y)\big)$ trong Phương trình~\eqref{eq:dpo_unnormalized} chưa phải là một phân phối xác suất hợp lệ vì tổng của nó theo mọi $y$ chưa chắc bằng $1$. Ta định nghĩa \textbf{Hàm phân hoạch (Partition Function)} $Z(x)$ làm hằng số chuẩn hóa:
+\begin{equation}
+    Z(x) = \sum_{y} \pi_{\text{ref}}(y \mid x) \exp\left( \frac{1}{\beta} r(x, y) \right).
+    \label{eq:partition_function}
+\end{equation}
+\begin{remark}
+Lưu ý cực kỳ quan trọng: $Z(x)$ là tổng lấy theo mọi câu trả lời $y$, do đó $Z(x)$ là một hàm số chỉ phụ thuộc vào câu hỏi $x$ và mô hình gốc $\pi_{\text{ref}}$, hoàn toàn \textbf{độc lập và không phụ thuộc vào chính sách $\pi$ đang cần tìm}.
+\end{remark}
+
+Chia và nhân mẫu số với $Z(x)$, đồng thời tách $\log Z(x)$ ra ngoài dấu tổng (vì $\sum_y \pi(y \mid x) = 1$):
+\begin{align}
+    &\min_{\pi} \sum_{y} \pi(y \mid x) \log \left( \frac{\pi(y \mid x)}{\frac{1}{Z(x)} \pi_{\text{ref}}(y \mid x) \exp\big(\frac{1}{\beta} r(x, y)\big) \cdot Z(x)} \right) \nonumber \\
+    \iff &\min_{\pi} \left[ \sum_{y} \pi(y \mid x) \log \left( \frac{\pi(y \mid x)}{\frac{1}{Z(x)} \pi_{\text{ref}}(y \mid x) \exp\big(\frac{1}{\beta} r(x, y)\big)} \right) - \sum_{y} \pi(y \mid x) \log Z(x) \right] \nonumber \\
+    \iff &\min_{\pi} \left[ \DKL\Big(\pi(\cdot \mid x) \;\parallel\; \pi^*(\cdot \mid x)\Big) - \log Z(x) \right],
+    \label{eq:dpo_kl_closed}
+\end{align}
+trong đó phân phối xác suất hợp lệ dưới mẫu số được đặt tên là $\pi^*(y \mid x)$:
+\begin{equation}
+    \pi^*(y \mid x) = \frac{1}{Z(x)} \pi_{\text{ref}}(y \mid x) \exp\left( \frac{1}{\beta} r(x, y) \right).
+    \label{eq:gibbs_solution}
+\end{equation}
+
+\begin{theorem}[Nghiệm Đóng Toàn cục của Bài toán RL có Ràng buộc KL]
+\label{thm:gibbs_optimal}
+Vì số hạng $\log Z(x)$ trong Phương trình~\eqref{eq:dpo_kl_closed} không phụ thuộc vào $\pi$, và theo Bất đẳng thức Gibbs trong lý thuyết thông tin, phân kỳ KL luôn không âm ($\DKL \ge 0$) và đạt giá trị cực tiểu bằng $0$ khi và chỉ khi hai phân phối trùng nhau hoàn toàn, nghiệm tối ưu toàn cục duy nhất $\pi^*(y \mid x)$ của bài toán RLHF bắt buộc phải có dạng phân phối Gibbs/Boltzmann:
+\begin{equation}
+    \pi^*(y \mid x) = \frac{1}{Z(x)} \pi_{\text{ref}}(y \mid x) \exp\left( \frac{1}{\beta} r(x, y) \right).
+\end{equation}
+\end{theorem}
+
+\subsection{Bước 2: Phép Đổi biến Đột phá -- Biểu diễn Ngược Hàm Phần thưởng theo Chính sách Tối ưu}
+Từ nghiệm đóng ở Theorem~\ref{thm:gibbs_optimal}, ta biến đổi đại số để rút hàm phần thưởng $r(x, y)$ ra một vế:
+\begin{equation}
+    \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)} = \frac{1}{Z(x)} \exp\left( \frac{1}{\beta} r(x, y) \right) \iff \exp\left( \frac{1}{\beta} r(x, y) \right) = Z(x) \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)}.
+\end{equation}
+Lấy logarit tự nhiên hai vế và nhân với $\beta$:
+\begin{equation}
+    r(x, y) = \beta \log \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)} + \beta \log Z(x).
+    \label{eq:reward_reparameterization}
+\end{equation}
+
+\begin{pedagogy}[Bản chất Triết học: Mọi Mô hình Ngôn ngữ Thực chất là một Reward Model Tiềm ẩn]
+Phương trình~\eqref{eq:reward_reparameterization} là phát hiện trung tâm của bài báo \citet{rafailov2023direct}: \textbf{Có sự tương ứng một-một giữa hàm phần thưởng $r(x, y)$ và chính sách tối ưu $\pi^*(y \mid x)$}.
+Thay vì phải dùng một mạng nơ-ron riêng biệt để xấp xỉ $r_\phi(x, y)$ rồi dùng thuật toán RL đi tìm $\pi_\theta$, ta có thể trực tiếp tham số hóa chính sách ngôn ngữ $\pi_\theta(y \mid x)$ và dùng chính nó để định nghĩa hàm phần thưởng tiềm ẩn!
+\end{pedagogy}
+
+\subsection{Bước 3: Thế vào Mô hình Bradley--Terry \& Sự Triệt tiêu Kỳ diệu của Hàm Phân hoạch $Z(x)$}
+Nếu đứng riêng một mình, biểu thức $r(x, y)$ ở Phương trình~\eqref{eq:reward_reparameterization} là bất khả thi để tính toán trên máy tính vì chứa $\log Z(x) = \log \sum_{y} \pi_{\text{ref}}(y \mid x) \exp\big(\frac{1}{\beta} r(x, y)\big)$ -- muốn tính $Z(x)$ ta phải tính tổng qua toàn bộ $|V|^T$ câu trả lời có thể tồn tại trong vũ trụ ngôn ngữ!
+
+Tuy nhiên, hãy nhớ lại mô hình sở thích Bradley--Terry (Phương trình~\eqref{eq:bradley_terry} ở Chương 2): xác suất để câu trả lời tốt $y_w$ thắng câu trả lời dở $y_l$ cho cùng một câu hỏi $x$ chỉ phụ thuộc vào \textbf{hiệu số giữa hai điểm thưởng} $r(x, y_w) - r(x, y_l)$. Khi ta thay Phương trình~\eqref{eq:reward_reparameterization} vào hiệu số này:
+\begin{align}
+    r(x, y_w) - r(x, y_l) &= \left( \beta \log \frac{\pi^*(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} + \beta \log Z(x) \right) - \left( \beta \log \frac{\pi^*(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} + \beta \log Z(x) \right) \nonumber \\
+    &= \beta \log \frac{\pi^*(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi^*(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} + \underbrace{\big(\beta \log Z(x) - \beta \log Z(x)\big)}_{= 0 \text{ (Triệt tiêu hoàn toàn!)}}.
+    \label{eq:z_cancellation}
+\end{align}
+
+Hai số hạng bất khả thi $\beta \log Z(x)$ (vốn chỉ phụ thuộc vào câu hỏi $x$) \textbf{triệt tiêu lẫn nhau hoàn toàn}!
+
+Thay hiệu số vừa tìm được vào mô hình xác suất Bradley--Terry $P(y_w \succ y_l \mid x) = \sigma\big(r(x, y_w) - r(x, y_l)\big)$, và thay chính sách tối ưu $\pi^*$ bằng mạng nơ-ron chính sách cần huấn luyện $\pi_\theta$, ta thu được xác suất sở thích biểu diễn trực tiếp qua mô hình ngôn ngữ:
+\begin{equation}
+    P_\theta(y_w \succ y_l \mid x) = \sigma \left( \beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} \right).
+    \label{eq:dpo_prob}
+\end{equation}
+
+Áp dụng hàm mất mát Negative Log-Likelihood trên tập dữ liệu sở thích $\mathcal{D}_{\text{pref}} = \{(x, y_w, y_l)\}$, ta thu được \textbf{Hàm Mất Mát DPO ($\mathcal{L}_{\text{DPO}}$)}:
+\begin{equation}
+    \boxed{\mathcal{L}_{\text{DPO}}(\theta; \pi_{\text{ref}}) = -\E_{(x, y_w, y_l) \sim \mathcal{D}_{\text{pref}}} \left[ \log \sigma \left( \beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} \right) \right]}
+    \label{eq:dpo_loss}
+\end{equation}
+
+\begin{remark}[Tính toán Log-Probability trên Toàn bộ Chuỗi]
+Trong Phương trình~\eqref{eq:dpo_loss}, đại lượng $\log \pi_\theta(y \mid x)$ được tính bằng tổng log-probability của từng token thuộc câu trả lời:
+\begin{equation}
+    \log \pi_\theta(y \mid x) = \sum_{t=1}^{|y|} \log \pi_\theta(y_t \mid x, y_{<t}).
+\end{equation}
+Phép tính này được thực hiện bằng một lượt lan truyền xuôi duy nhất qua mạng Transformer với mặt nạ Prompt Masking giống hệt SFT (Chương 1).
+\end{remark}
+
+% ============================================================================
+\section{Giải phẫu Động lực học Gradient của DPO}
+\label{sec:dpo_gradients}
+
+Để hiểu sâu sắc cơ chế ổn định và tự điều tốc của DPO, hãy định nghĩa \textbf{Điểm thưởng Tiềm ẩn (Implicit Reward)} do chính sách $\pi_\theta$ tự định nghĩa là:
+\begin{equation}
+    \hat{r}_\theta(x, y) = \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}.
+    \label{eq:implicit_reward}
+\end{equation}
+
+Khi đó đối số bên trong hàm Sigmoid của DPO là hiệu số phần thưởng tiềm ẩn: $\Delta \hat{r}_\theta = \hat{r}_\theta(x, y_w) - \hat{r}_\theta(x, y_l)$.
+
+\begin{theorem}[Công thức Gradient của DPO \citep{rafailov2023direct}]
+\label{thm:dpo_gradient}
+Đạo hàm của hàm mất mát $\mathcal{L}_{\text{DPO}}(\theta)$ theo tham số $\theta$ của mạng nơ-ron có dạng:
+\begin{equation}
+    \nabla_\theta \mathcal{L}_{\text{DPO}}(\theta) = -\beta \E_{(x, y_w, y_l)} \left[ \underbrace{\sigma\big(\hat{r}_\theta(x, y_l) - \hat{r}_\theta(x, y_w)\big)}_{\text{(1) Trọng số Thích ứng Động}} \cdot \left( \underbrace{\nabla_\theta \log \pi_\theta(y_w \mid x)}_{\text{(2) Kéo tăng } y_w} - \underbrace{\nabla_\theta \log \pi_\theta(y_l \mid x)}_{\text{(3) Đè giảm } y_l} \right) \right].
+    \label{eq:dpo_gradient_formula}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Sử dụng quy tắc đạo hàm hàm hợp cho $\ell = -\log \sigma(u)$ với $u = \beta \big(\log \pi_\theta(y_w \mid x) - \log \pi_{\text{ref}}(y_w \mid x)\big) - \beta \big(\log \pi_\theta(y_l \mid x) - \log \pi_{\text{ref}}(y_l \mid x)\big)$.
+Ta có $\frac{d}{du}[-\log \sigma(u)] = -\frac{\sigma'(u)}{\sigma(u)} = -\frac{\sigma(u)(1-\sigma(u))}{\sigma(u)} = -(1 - \sigma(u)) = -\sigma(-u)$.
+Do đó:
+\begin{equation}
+    \nabla_\theta \ell = -\sigma(-u) \nabla_\theta u = -\sigma\big(\hat{r}_\theta(x, y_l) - \hat{r}_\theta(x, y_w)\big) \cdot \beta \left( \nabla_\theta \log \pi_\theta(y_w \mid x) - \nabla_\theta \log \pi_\theta(y_l \mid x) \right).
+\end{equation}
+\end{proof}
+
+\subsection{Ý nghĩa Cơ học của Ba Thành phần trong Gradient DPO}
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Thành phần (2) $+\nabla_\theta \log \pi_\theta(y_w \mid x)$:} Hoạt động giống hệt đạo hàm của SFT -- tạo một lực kéo gradient làm \textbf{tăng xác suất} sinh ra câu trả lời được con người ưa chuộng $y_w$.
+    \item \textbf{Thành phần (3) $-\nabla_\theta \log \pi_\theta(y_l \mid x)$:} Tạo một lực đẩy ngược chiều làm \textbf{giảm xác suất} sinh ra câu trả lời bị từ chối $y_l$.
+    \item \textbf{Thành phần (1) $\sigma\big(\hat{r}_\theta(x, y_l) - \hat{r}_\theta(x, y_w)\big)$ -- ``Bộ Điều tốc Tự động'':}
+    Trước khi DPO ra đời, các phương pháp loại bỏ câu dở ngây thơ (\textit{Unlikelihood Training}) lấy thẳng hiệu số $\nabla \log \pi(y_w) - \nabla \log \pi(y_l)$ không có trọng số điều chỉnh. Khi đó mô hình nhanh chóng bị sụp đổ vì nó tiếp tục đè xác suất của $y_l$ xuống $-\infty$ ngay cả khi câu đó đã bị lãng quên!
+    Trong DPO, trọng số (1) đo lường \textbf{mức độ đánh giá sai hiện tại của mô hình}:
+    \begin{itemize}
+        \item \textbf{Khi mô hình đang đánh giá sai nghiêm trọng} (chấm câu dở $y_l$ cao điểm hơn câu tốt $y_w$, tức $\hat{r}_\theta(y_l) > \hat{r}_\theta(y_w)$): Đối số của hàm $\sigma$ là số dương $\implies \sigma(\cdot) \to 1$. DPO sinh ra \textbf{lực cập nhật gradient cực đại} để sửa sai.
+        \item \textbf{Khi mô hình đã phân biệt đúng với biên độ an toàn} ($\hat{r}_\theta(y_w) \gg \hat{r}_\theta(y_l)$): Đối số $\hat{r}_\theta(y_l) - \hat{r}_\theta(y_w)$ rất âm $\implies \sigma(\cdot) \to 0$. Gradient tự động triệt tiêu về $\mathbf{0}$, \textbf{mô hình tự động ngừng cập nhật trên cặp mẫu đó} để bảo toàn phân phối ngôn ngữ tự nhiên của $\pi_{\text{ref}}$!
+    \end{itemize}
+\end{enumerate}
+
+% ============================================================================
+\section{Bốn Cạm bẫy Lý thuyết của DPO Gốc \& Các Biến thể Khắc phục}
+\label{sec:dpo_failure_modes}
+
+Dù DPO giúp cắt giảm quy trình từ 4 mô hình xuống còn 2 mô hình ($\pi_\theta$ và $\pi_{\text{ref}}$), các nghiên cứu giai đoạn 2024--2025 đã vạch ra 4 cạm bẫy toán học lớn của DPO gốc và đề xuất các phương pháp giải quyết triệt để:
+
+\subsection{Cạm bẫy 1: Thiên kiến Độ dài (Length / Verbosity Bias) \& Giải pháp SimPO \citep{park2024disentangling, meng2024simpo}}
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Nguyên nhân toán học:} Phần thưởng tiềm ẩn của DPO được định nghĩa bằng tổng log-prob trên toàn bộ độ dài câu:
+    \begin{equation}
+        \hat{r}_\theta(x, y) = \beta \sum_{t=1}^{|y|} \log \frac{\pi_\theta(y_t \mid x, y_{<t})}{\pi_{\text{ref}}(y_t \mid x, y_{<t})}.
+    \end{equation}
+    Giả sử tại mỗi token, mô hình tạo ra một độ lệch log-ratio dương nhỏ $\epsilon = +0.05$. Một câu trả lời ngắn gọn súc tích dài $|y| = 100$ tokens chỉ tích lũy được phần thưởng $\hat{r} = 100 \times 0.05 = 5$. Ngược lại, một câu trả lời dài dòng lan man $|y| = 1,000$ tokens tích lũy được phần thưởng lên tới $\hat{r} = 1,000 \times 0.05 = 50$!
+    DPO vô tình thưởng cho các câu trả lời dài lê thê (\textbf{Verbosity Bias}), khiến mô hình sau DPO mắc bệnh nói nhiều nhưng rỗng nội dung.
+\end{itemize}
+
+\begin{definition}[Thuật toán SimPO -- Meng, Xia \& Chen, NeurIPS 2024 \citep{meng2024simpo}]
+Phương pháp \textbf{SimPO (Simple Preference Optimization)} giải quyết triệt để thiên kiến độ dài bằng hai cải tiến toán học:
+\begin{enumerate}[label=(\alph*), leftmargin=1.2cm]
+    \item \textbf{Chuẩn hóa theo chiều dài (Length Normalization):} Chia trực tiếp tổng log-probability cho độ dài chuỗi $|y|$ để lấy giá trị trung bình trên mỗi token:
+    \begin{equation}
+        r_{\text{SimPO}}(x, y) = \frac{\beta}{|y|} \log \pi_\theta(y \mid x) = \frac{\beta}{|y|} \sum_{t=1}^{|y|} \log \pi_\theta(y_t \mid x, y_{<t}).
+    \end{equation}
+    \item \textbf{Loại bỏ Mô hình Tham chiếu \& Đặt Biên độ Thắng Mục tiêu $\gamma > 0$:} SimPO loại bỏ hoàn toàn $\pi_{\text{ref}}$, đồng thời đưa thêm một hằng số mục tiêu $\gamma > 0$ (\textit{Target Reward Margin}) vào mô hình Bradley--Terry:
+    \begin{equation}
+        \boxed{\mathcal{L}_{\text{SimPO}}(\theta) = -\E_{(x, y_w, y_l)} \left[ \log \sigma \left( \frac{\beta}{|y_w|} \log \pi_\theta(y_w \mid x) - \frac{\beta}{|y_l|} \log \pi_\theta(y_l \mid x) - \gamma \right) \right]}
+        \label{eq:simpo_loss}
+    \end{equation}
+\end{enumerate}
+Nhờ đó, SimPO chỉ cần duy trì \textbf{duy nhất 1 mô hình trên GPU}, loại bỏ hoàn toàn bộ nhớ cho $\pi_{\text{ref}}$, triệt tiêu thiên kiến độ dài và vượt trội DPO trên AlpacaEval 2 và MT-Bench.
+\end{definition}
+
+\subsection{Cạm bẫy 2: Hiện tượng Dịch chuyển Xác suất (Likelihood Displacement) \& RPO \citep{razin2024unintentional, pang2024iterative}}
+Học viên thường trực giác rằng khi huấn luyện DPO, xác suất của câu tốt $\log \pi_\theta(y_w \mid x)$ sẽ tăng lên và xác suất của câu dở $\log \pi_\theta(y_l \mid x)$ sẽ giảm xuống.
+Tuy nhiên, công trình của \citet{razin2024unintentional} tại ICLR 2025 và \citet{pal2024smaug} đã phát hiện một hiện tượng gây chấn động: \textbf{Trong quá trình huấn luyện DPO, xác suất tuyệt đối của câu trả lời tốt $\log \pi_\theta(y_w \mid x)$ thực chất cũng bị sụt giảm!}
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[scale=1.0]
+    \draw[->] (0,-4) -- (0,1) node[above] {Log-Probability $\log \pi_\theta(y \mid x)$};
+    \draw[->] (-0.5,-3.5) -- (6.5,-3.5) node[right] {Số bước huấn luyện (Steps)};
+    
+    % y_w curve
+    \draw[blue, thick] (0,-0.5) to[out=-20, in=180] (3,-1.2) to[out=0, in=170] (6,-1.8);
+    \node[blue, right] at (6,-1.8) {$\log \pi_\theta(y_w \mid x)$ (Bị kéo tụt xuống!)};
+    
+    % y_l curve
+    \draw[red, thick, dashed] (0,-0.7) to[out=-40, in=180] (3,-2.2) to[out=0, in=175] (6,-3.2);
+    \node[red, right] at (6,-3.2) {$\log \pi_\theta(y_l \mid x)$ (Giảm rất nhanh)};
+    
+    % Margin arrow
+    \draw[<->, darkgreen, thick] (3,-1.2) -- (3,-2.2) node[midway, right] {Hiệu số Margin vẫn tăng!};
+    \draw[<->, darkgreen, thick] (5.5,-1.7) -- (5.5,-3.1) node[midway, right] {Margin cực đại};
+\end{tikzpicture}
+\caption{Hiện tượng Dịch chuyển Xác suất (Likelihood Displacement): Cả $y_w$ và $y_l$ đều giảm xác suất, nhưng vì $y_l$ giảm nhanh hơn nên mất mát DPO vẫn giảm.}
+\label{fig:likelihood_displacement}
+\end{figure}
+
+* \textbf{Cơ chế toán học của Likelihood Displacement:}
+Trong các tác vụ giải toán hoặc lập trình, câu trả lời đúng $y_w$ và câu trả lời sai $y_l$ thường có tới $80\% - 90\%$ các bước dẫn xuất đầu tiên giống hệt nhau, chỉ khác nhau ở một con số ở phép tính cuối cùng. Khi lực đạo hàm $-\nabla_\theta \log \pi_\theta(y_l \mid x)$ đè mạnh các token của $y_l$, nó vô tình đè bẹp luôn các token chung nằm trong $y_w$!
+Chỉ cần $\log \pi_\theta(y_l)$ tụt nhanh hơn $\log \pi_\theta(y_w)$ (ví dụ $y_l$ tụt từ $-10$ xuống $-50$, còn $y_w$ tụt từ $-10$ xuống $-25$), thì hiệu số $(-25) - (-50) = +25$ vẫn tăng mạnh và hàm mất mát DPO vẫn giảm đẹp đẽ!
+* \textbf{Hậu quả:} Do tổng xác suất trên toàn bảng từ vựng phải bằng $1$ ($\sum_{y} \pi_\theta(y \mid x) = 1$), khi cả $y_w$ và $y_l$ đều bị rút bớt khối lượng xác suất, phần xác suất bị mất đó sẽ \textbf{tràn sang các chuỗi token kỳ quặc nằm ngoài phân phối (Out-of-Distribution)}, làm suy giảm nghiêm trọng khả năng lập luận của mô hình.
+* \textbf{Giải pháp chuẩn công nghiệp: DPO+NLL / RPO \citep{pang2024iterative, dubey2024llama, lambert2024tulu}:}
+Cộng thêm một thành phần hàm mất mát SFT (Negative Log-Likelihood) tính riêng trên câu trả lời tốt $y_w$ với trọng số $\alpha > 0$:
+\begin{equation}
+    \boxed{\mathcal{L}_{\text{DPO+NLL}}(\theta) = \mathcal{L}_{\text{DPO}}(\theta; \pi_{\text{ref}}) + \alpha \cdot \left( -\frac{1}{|y_w|} \sum_{t=1}^{|y_w|} \log \pi_\theta(y_{w, t} \mid x, y_{w, <t}) \right)}
+    \label{eq:rpo_loss}
+\end{equation}
+Thành phần SFT đóng vai trò như một chiếc mỏ neo kéo xác suất của $y_w$ không bị trôi tuột xuống.
+
+\subsection{Cạm bẫy 3: Phân rã Đơn nhất không cần Reference Model (ORPO \citealt{hong2024orpo})}
+Phương pháp \textbf{ORPO (Odds Ratio Preference Optimization)} \citep{hong2024orpo} đề xuất gộp chung giai đoạn SFT và giai đoạn Alignment vào làm một bước duy nhất bằng cách sử dụng tỷ số Odds:
+\begin{equation}
+    \text{Odds}_\theta(y \mid x) = \frac{\pi_\theta(y \mid x)}{1 - \pi_\theta(y \mid x)}.
+\end{equation}
+Hàm mất mát ORPO kết hợp hàm mất mát SFT trên $y_w$ và phạt tỷ số Odds giữa $y_w$ và $y_l$:
+\begin{equation}
+    \mathcal{L}_{\text{ORPO}}(\theta) = \mathcal{L}_{\text{SFT}}(y_w) + \lambda_{\text{OR}} \cdot \left( -\log \sigma \left( \log \frac{\text{Odds}_\theta(y_w \mid x)}{\text{Odds}_\theta(y_l \mid x)} \right) \right).
+    \label{eq:orpo_loss}
+\end{equation}
+
+\subsection{Cạm bẫy 4: Suy biến khi Sở thích Tất định (IPO) \& Tối ưu theo Lý thuyết Triển vọng (KTO)}
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{IPO (Identity Preference Optimization -- Azar et al., Google DeepMind, AISTATS 2024 \citealt{azar2024general}):} Chỉ ra rằng trong mô hình Bradley--Terry, nếu dữ liệu sở thích là tất định ($P(y_w \succ y_l) = 1$), DPO sẽ cố đẩy hiệu số phần thưởng ra vô cùng $+\infty$ bất kể $\beta$ lớn đến đâu, dẫn đến việc mô hình luôn bị trôi dạt khỏi $\pi_{\text{ref}}$. IPO khắc phục bằng cách thay hàm log-sigmoid bằng một hàm mất mát bình phương khoảng cách:
+    \begin{equation}
+        \mathcal{L}_{\text{IPO}}(\theta) = \E_{(x, y_w, y_l)} \left[ \left( \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} - \frac{1}{2\beta} \right)^2 \right].
+        \label{eq:ipo_loss}
+    \end{equation}
+    \item \textbf{KTO (Kahneman--Tversky Optimization -- Ethayarajh et al., ICML 2024 \citealt{ethayarajh2024kto}):} Dựa trên *Lý thuyết Triển vọng (Prospect Theory)* đạt giải Nobel Kinh tế của Kahneman và Tversky (con người ghét sự mất mát hơn là yêu thích phần thưởng cùng giá trị). KTO cho phép huấn luyện mô hình căn chỉnh trực tiếp từ \textbf{dữ liệu phản hồi đơn lẻ} (mỗi câu trả lời chỉ cần gắn nhãn nhị phân: $\text{Thích}$ hoặc $\text{Không thích}$, ví dụ nút Thumbs Up/Down trong sản phẩm thực tế) mà không cần phải tốn công ghép thành cặp $(y_w, y_l)$ cho cùng một câu hỏi.
+\end{itemize}
+
+\subsection{Offline DPO vs. Online / Iterative DPO \citep{xiong2024iterative}}
+Trong DPO tiêu chuẩn (\textbf{Offline DPO}), tập dữ liệu $(x, y_w, y_l)$ được tạo sẵn cố định từ trước. Khi mô hình $\pi_\theta$ thay đổi qua hàng nghìn bước cập nhật, phân phối của $\pi_\theta$ đã trôi xa khỏi phân phối sinh ra tập dữ liệu tĩnh ban đầu (\textbf{Distribution Shift / Off-Policy Gap}).
+Để khắc phục, các hệ thống tiên tiến nhất như Llama 3 \citep{dubey2024llama} áp dụng \textbf{Iterative / Online DPO}: cứ sau mỗi chu kỳ huấn luyện, lại dùng chính phiên bản $\pi_\theta$ mới nhất sinh ra các cặp câu trả lời mới, chấm điểm qua Reward Model hoặc bộ kiểm chứng, rồi tiếp tục huấn luyện vòng DPO tiếp theo.
