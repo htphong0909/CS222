@@ -114,59 +114,16 @@
 \headcommand {\beamer@framepages {40}{40}}
 \headcommand {\slideentry {4}{2}{4}{41/41}{4.2. Thuật toán GRPO \& Cơ chế Thống kê Nhóm}{0}}
 \headcommand {\beamer@framepages {41}{41}}
-\headcommand {\slideentry {4}{2}{5}{42/42}{4.2. Thuật toán GRPO \& Cơ chế Thống kê Nhóm}{0}}
+\headcommand {\beamer@subsectionpages {38}{41}}
+\headcommand {\beamer@subsectionentry {0}{4}{3}{42}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}}
+\headcommand {\slideentry {4}{3}{1}{42/42}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{0}}
 \headcommand {\beamer@framepages {42}{42}}
-\headcommand {\beamer@subsectionpages {38}{42}}
-\headcommand {\beamer@subsectionentry {0}{4}{3}{43}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}}
-\headcommand {\slideentry {4}{3}{1}{43/43}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{0}}
+\headcommand {\slideentry {4}{3}{2}{43/43}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{0}}
 \headcommand {\beamer@framepages {43}{43}}
-\headcommand {\slideentry {4}{3}{2}{44/44}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{0}}
+\headcommand {\slideentry {4}{3}{3}{44/44}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{0}}
 \headcommand {\beamer@framepages {44}{44}}
-\headcommand {\slideentry {4}{3}{3}{45/45}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{0}}
-\headcommand {\beamer@framepages {45}{45}}
-\headcommand {\beamer@subsectionpages {43}{45}}
-\headcommand {\beamer@subsectionentry {0}{4}{4}{46}{4.4. Tổng kết Phần 4: Hạn chế của RLVR + GRPO trên Mô hình Nhỏ}}
-\headcommand {\slideentry {4}{4}{1}{46/46}{4.4. Tổng kết Phần 4: Hạn chế của RLVR + GRPO trên Mô hình Nhỏ}{0}}
-\headcommand {\beamer@framepages {46}{46}}
-\headcommand {\beamer@sectionpages {33}{46}}
-\headcommand {\beamer@subsectionpages {46}{46}}
-\headcommand {\sectionentry {5}{Knowledge Distillation}{47}{Knowledge Distillation}{0}}
-\headcommand {\slideentry {5}{0}{1}{47/47}{}{0}}
-\headcommand {\beamer@framepages {47}{47}}
-\headcommand {\beamer@subsectionpages {47}{47}}
-\headcommand {\beamer@subsectionentry {0}{5}{1}{48}{5.1. Knowledge Distillation từ Teacher sang Student Model}}
-\headcommand {\slideentry {5}{1}{1}{48/48}{5.1. Knowledge Distillation từ Teacher sang Student Model}{0}}
-\headcommand {\beamer@framepages {48}{48}}
-\headcommand {\slideentry {5}{1}{2}{49/49}{5.1. Knowledge Distillation từ Teacher sang Student Model}{0}}
-\headcommand {\beamer@framepages {49}{49}}
-\headcommand {\slideentry {5}{1}{3}{50/50}{5.1. Knowledge Distillation từ Teacher sang Student Model}{0}}
-\headcommand {\beamer@framepages {50}{50}}
-\headcommand {\slideentry {5}{1}{4}{51/51}{5.1. Knowledge Distillation từ Teacher sang Student Model}{0}}
-\headcommand {\beamer@framepages {51}{51}}
-\headcommand {\slideentry {5}{1}{5}{52/52}{5.1. Knowledge Distillation từ Teacher sang Student Model}{0}}
-\headcommand {\beamer@framepages {52}{52}}
-\headcommand {\slideentry {5}{1}{6}{53/53}{5.1. Knowledge Distillation từ Teacher sang Student Model}{0}}
-\headcommand {\beamer@framepages {53}{53}}
-\headcommand {\beamer@subsectionpages {48}{53}}
-\headcommand {\beamer@subsectionentry {0}{5}{2}{54}{5.2. Hiệu chỉnh Tham số \& Đánh giá Hệ thống Post-training}}
-\headcommand {\slideentry {5}{2}{1}{54/54}{5.2. Hiệu chỉnh Tham số \& Đánh giá Hệ thống Post-training}{0}}
-\headcommand {\beamer@framepages {54}{54}}
-\headcommand {\slideentry {5}{2}{2}{55/55}{5.2. Hiệu chỉnh Tham số \& Đánh giá Hệ thống Post-training}{0}}
-\headcommand {\beamer@framepages {55}{55}}
-\headcommand {\slideentry {5}{2}{3}{56/56}{5.2. Hiệu chỉnh Tham số \& Đánh giá Hệ thống Post-training}{0}}
-\headcommand {\beamer@framepages {56}{56}}
-\headcommand {\beamer@subsectionpages {54}{56}}
-\headcommand {\beamer@subsectionentry {0}{5}{3}{57}{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}}
-\headcommand {\slideentry {5}{3}{1}{57/57}{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}{0}}
-\headcommand {\beamer@framepages {57}{57}}
-\headcommand {\slideentry {5}{3}{2}{58/58}{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}{0}}
-\headcommand {\beamer@framepages {58}{58}}
-\headcommand {\slideentry {5}{3}{3}{59/59}{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}{0}}
-\headcommand {\beamer@framepages {59}{59}}
-\headcommand {\slideentry {5}{3}{4}{60/60}{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}{0}}
-\headcommand {\beamer@framepages {60}{60}}
-\headcommand {\beamer@partpages {1}{60}}
-\headcommand {\beamer@subsectionpages {57}{60}}
-\headcommand {\beamer@sectionpages {47}{60}}
-\headcommand {\beamer@documentpages {60}}
-\headcommand {\gdef \inserttotalframenumber {55}}
+\headcommand {\beamer@partpages {1}{44}}
+\headcommand {\beamer@subsectionpages {42}{44}}
+\headcommand {\beamer@sectionpages {33}{44}}
+\headcommand {\beamer@documentpages {44}}
+\headcommand {\gdef \inserttotalframenumber {40}}

@@ -99,7 +99,7 @@
   \section[#2]{#2}
   \begin{frame}[plain,noframenumbering,t]
     \vspace{1.0cm}
-    {\large\bfseries\color{reforange}PHẦN #1 / 05\par}
+    {\large\bfseries\color{reforange}PHẦN #1 / 04\par}
     \vspace{0.55cm}
     {\fontsize{28}{32}\selectfont\bfseries\color{refblue}#2\par}
     \vspace{0.20cm}
@@ -107,12 +107,12 @@
     \vspace{0.65cm}
     {\small\color{refgray}\textbf{Nội dung:} #4\par}
     \vspace{0.40cm}
-    \foreach \step in {1,...,5}{%
+    \foreach \step in {1,...,4}{%
       \ifnum\step=#1\relax\color{reforange}\else\color{refblue!20}\fi
-      \rule{1.80cm}{2.2pt}\hspace{0.10cm}%
+      \rule{2.30cm}{2.2pt}\hspace{0.10cm}%
     }\par
     \vspace{0.15cm}
-    {\scriptsize\color{refgray}Năm giai đoạn của Post-training: từ SFT đến Knowledge Distillation\par}
+    {\scriptsize\color{refgray}Bốn giai đoạn của Post-training: từ SFT đến GRPO / RLVR\par}
   \end{frame}%
 }
 

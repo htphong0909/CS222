@@ -51,7 +51,7 @@
   \small
   \begin{itemize}\setlength{\itemsep}{6pt}
     \item \textbf{Outcome Reward Model (ORM):}\\
-      Cấp một điểm thưởng $R \in \{0, 1\}$ tại cuối chuỗi. Tương thích bộ kiểm chứng RLVR; đặc tính tín hiệu thưa (\textit{Sparse Reward}).
+      Cấp một điểm thưởng $R \in \{0, 1\}$ tại cuối chuỗi. Tương thích bộ kiểm chứng RLVR.
     \item \textbf{Process Reward Model (PRM):}\\
       Cấp điểm thưởng $r_k$ sau từng bước trung gian $s_k$ (Lightman et al., 2023). Tín hiệu dày đặc (\textit{Dense Credit}), định vị chính xác bước sai.
   \end{itemize}
@@ -62,8 +62,6 @@
 % SLIDE: GIỚI HẠN CỦA PRM
 % ----------------------------------------------------------------------------
 \begin{frame}{Giới hạn của PRM trong thực nghiệm}
-  \lead{Vì sao các mô hình suy luận hiện đại (DeepSeek-R1) chọn ORM thay vì PRM?}
-  \small
   \begin{enumerate}\setlength{\itemsep}{5pt}
     \item \textbf{Step Boundary Ambiguity:}\\
       \small Tư duy tự do (thử sai, quay lui) không thể chia thành các bước cứng nhắc.
@@ -84,8 +82,7 @@
   \lead{Mạng Critic $V_\psi$ trở thành điểm nghẽn nghiêm trọng khi chuỗi suy luận mở rộng.}
   \small
   \begin{itemize}\setlength{\itemsep}{6pt}
-    \item \textbf{Gánh nặng VRAM:} Critic $V_\psi$ quy mô 70B--671B chiếm gấp đôi bộ nhớ GPU.
-    \item \textbf{Phương sai lớn:} Thưởng thưa $\{0, 1\}$ ở token thứ $10{,}000$ khiến ước lượng $V(s_t)$ tích lũy sai số cao.
+    \item \textbf{Gánh nặng VRAM:} Critic $V_\psi$ quy mô 70B--671B chiếm nhiều bộ nhớ GPU.
     \item \textbf{Bất ổn định:} Nhiễu loạn Advantage dễ gây sập chính sách khi CoT dài.
   \end{itemize}
   \par\vspace{0pt}
@@ -198,31 +195,6 @@
   \par\vspace{0pt}
 \end{frame}
 
-% ----------------------------------------------------------------------------
-% SLIDE: VÍ DỤ TÍNH TOÁN MINH HỌA GRPO
-% ----------------------------------------------------------------------------
-\begin{frame}{Ví dụ GRPO: nhóm bốn quỹ đạo}
-  \lead{Chuẩn hóa nhóm phân tách Advantage của mẫu giải đúng và mẫu giải sai.}
-  \vspace{0.05cm}
-  \scriptsize
-  \renewcommand{\arraystretch}{1.15}
-  \setlength{\tabcolsep}{3pt}
-  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.13\linewidth} >{\raggedright\arraybackslash}X >{\centering\arraybackslash}p{.10\linewidth} >{\centering\arraybackslash}p{.22\linewidth} >{\raggedright\arraybackslash}X@{}}
-    \toprule
-    \textbf{Quỹ đạo} & \textbf{Kiểm chứng} & \textbf{Điểm $r_i$} & \textbf{Advantage $\hat{A}_i$} & \textbf{Cập nhật gradient} \\
-    \midrule
-    \textbf{Quỹ đạo $o_1$} & \textbf{Đúng} + Đúng thẻ & $1.0$ & $\mathbf{+1.72 > 0}$ & \textbf{\textcolor{tealgreen}{Tăng mạnh xác suất ($\uparrow\uparrow$)}} \\
-    \textbf{Quỹ đạo $o_2$} & \textbf{Sai}, đúng thẻ & $0.1$ & $\mathbf{-0.41 < 0}$ & \textbf{\textcolor{stanfordred}{Giảm nhẹ xác suất ($\downarrow$)}} \\
-    \textbf{Quỹ đạo $o_3$} & \textbf{Sai} + Sai thẻ & $0.0$ & $\mathbf{-0.65 < 0}$ & \textbf{\textcolor{stanfordred}{Giảm mạnh xác suất ($\downarrow\downarrow$)}} \\
-    \textbf{Quỹ đạo $o_4$} & \textbf{Sai} + Sai thẻ & $0.0$ & $\mathbf{-0.65 < 0}$ & \textbf{\textcolor{stanfordred}{Giảm mạnh xác suất ($\downarrow\downarrow$)}} \\
-    \bottomrule
-  \end{tabularx}
-
-  \vspace{0.12cm}
-  \takeaway{Không cần Critic, Z-score tự gán Advantage dương cho quỹ đạo đúng duy nhất ($o_1$) và phạt các quỹ đạo sai.}
-  \par\vspace{0pt}
-\end{frame}
-
 \subsection{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}
 
 % ----------------------------------------------------------------------------
@@ -260,26 +232,9 @@
   \lead{Mở rộng năng lực mô hình thông qua tính toán lúc suy diễn (Snell et al., 2024).}
   \small
   \begin{itemize}\setlength{\itemsep}{6pt}
-    \item \textbf{Sequential Scaling:} Kéo dài chuỗi \texttt{<think>} (lên tới $32{,}000$ token) để tự kiểm chứng sâu.
+    \item \textbf{Sequential Scaling:} Kéo dài chuỗi \texttt{<think>} để tự kiểm chứng sâu.
     \item \textbf{Parallel Scaling:} Lấy mẫu $N$ quỹ đạo độc lập; hợp nhất qua \textbf{Best-of-$N$} hoặc \textbf{Majority Voting}.
     \item \textbf{Quy luật:} Chi phí tính toán lúc suy diễn có thể bù đắp và vượt trội việc mở rộng kích thước mô hình.
   \end{itemize}
-  \par\vspace{0pt}
-\end{frame}
-
-\subsection{4.4. Tổng kết Phần 4: Hạn chế của RLVR + GRPO trên Mô hình Nhỏ}
-
-% ----------------------------------------------------------------------------
-% SLIDE: HẠN CHẾ CỦA RLVR + GRPO
-% ----------------------------------------------------------------------------
-\begin{frame}{Hạn chế của RLVR + GRPO trên mô hình nhỏ}
-  \begin{enumerate}\setlength{\itemsep}{4pt}
-    \item \textbf{Độ lệch chuẩn ($\sigma_r > 0$):}\\
-      \small Trong nhóm $G$, bắt buộc phải có ít nhất một mẫu đúng để tạo tín hiệu Advantage.
-    \item \textbf{Triệt tiêu Gradient ($\nabla_\theta = \mathbf{0}$):}\\
-      \small Mô hình nhỏ giải sai cả $G$ lần ($r_i=0 \implies \hat{A}_i = 0$), việc học bị đóng băng.
-    \item \textbf{Cold-start Cost:}\\
-      \small Tự khám phá CoT từ số 0 đòi hỏi tài nguyên khổng lồ (671B tham số).
-  \end{enumerate}
   \par\vspace{0pt}
 \end{frame}

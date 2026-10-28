@@ -14,9 +14,4 @@
 \beamer@sectionintoc {4}{RLVR và GRPO}{33}{0}{4}
 \beamer@subsectionintoc {4}{1}{4.1. Verifiable Rewards (RLVR) \& Credit Assignment (ORM vs.\ PRM)}{34}{0}{4}
 \beamer@subsectionintoc {4}{2}{4.2. Thuật toán GRPO \& Cơ chế Thống kê Nhóm}{38}{0}{4}
-\beamer@subsectionintoc {4}{3}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{43}{0}{4}
-\beamer@subsectionintoc {4}{4}{4.4. Tổng kết Phần 4: Hạn chế của RLVR + GRPO trên Mô hình Nhỏ}{46}{0}{4}
-\beamer@sectionintoc {5}{Knowledge Distillation}{47}{0}{5}
-\beamer@subsectionintoc {5}{1}{5.1. Knowledge Distillation từ Teacher sang Student Model}{48}{0}{5}
-\beamer@subsectionintoc {5}{2}{5.2. Hiệu chỉnh Tham số \& Đánh giá Hệ thống Post-training}{54}{0}{5}
-\beamer@subsectionintoc {5}{3}{5.3. Tổng kết Toàn diện Chuyên đề Seminar (2020--2026)}{57}{0}{5}
+\beamer@subsectionintoc {4}{3}{4.3. Sự Nảy sinh Chuỗi Suy luận Nội tại \& Test-time Scaling}{42}{0}{4}
