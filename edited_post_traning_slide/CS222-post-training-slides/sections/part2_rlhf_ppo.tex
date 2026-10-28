@@ -137,10 +137,7 @@
         \node[trainmodel, text width=3.8cm, minimum height=3.1cm] (rm) at (9.0, 0) {
           \textbf{Reward Model $r_\phi$}\\
           (Reward Model)\\[6pt]
-          \normalfont\scriptsize Khởi tạo từ $\pi_{\text{SFT}}$;\\
-          Thay đầu từ vựng $|\mathcal{V}|$ bằng\\
-          \textbf{Đầu Chiếu Vô hướng}\\
-          $W_r \in \mathbb{R}^{d \times 1}$ tại \texttt{<EOS>}
+          \normalfont\scriptsize Khởi tạo từ $\pi_{\text{SFT}}$
         };
 
         \node[rewardbox, text width=2.9cm, minimum height=1.0cm] (rw) at (13.3, 1.15) {
@@ -152,8 +149,7 @@
         };
 
         \node[lossbox, text width=3.6cm, minimum height=1.6cm] (btloss) at (17.5, 0) {
-          \textbf{RM Loss}\\[3pt]
-          \normalfont\scriptsize Cực đại hóa hiệu số $r_w - r_l$
+          \textbf{RM Loss}\\[4pt]
         };
 
         \coordinate (bus_p) at (1.9, 0);
@@ -257,8 +253,8 @@
   \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
   \footnotesize
   \begin{itemize}\setlength{\itemsep}{2pt}
-    \item \textbf{Baseline $b(x) = \frac{1}{G}\sum_{i=1}^G R(x, y_i)$:} Điểm trung bình của nhóm $G$ câu trả lời từ prompt $x$, giúp giảm phương sai gradient mà không làm chệch kỳ vọng.
-    \item \textbf{Advantage $A(x, y) = R_{\text{total}} - b(x)$:} Đo mức vượt trội so với kỳ vọng ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
+    \item \textbf{Baseline $b(x)$:} Điểm trung bình cho prompt $x$.
+    \item \textbf{Advantage $A(x, y)$:} ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
@@ -317,6 +313,51 @@
 \subsection{2.3. Policy Gradient, Thuật toán PPO (Value Network \texorpdfstring{$V_\psi$}{V\textunderscore ψ}) \& Hệ thống 4 Mô hình}
 
 % ----------------------------------------------------------------------------
+% SLIDE: TỔNG QUAN MẠNG CRITIC (VALUE NETWORK)
+% ----------------------------------------------------------------------------
+\begin{frame}{Mạng Critic (Value Network)}
+  \lead{Giải quyết bất ổn định do biến động phần thưởng trong huấn luyện RL.}
+  \subhead{Động lực ra đời}
+  \small
+  \begin{itemize}\setlength{\itemsep}{3pt}
+    \item \textbf{Bất ổn định do bùng nổ reward:}\\
+      Điểm thưởng $R(x, y)$ có phương sai rất lớn giữa các câu trả lời, làm gradient dao động mạnh và dễ gây sụp đổ chính sách.
+    \item \textbf{$\implies$ Cần mạng Critic ($V_\psi$):}\\
+      Cần một mạng đo trước điểm số kỳ vọng sẽ nhận được từ trạng thái hiện tại để làm mốc quy chiếu (baseline).
+  \end{itemize}
+
+  \subhead{Cấu trúc và Vai trò}
+  \small
+  \begin{itemize}\setlength{\itemsep}{3pt}
+    \item \textbf{Đầu vào (Input):} Trạng thái $s_t = (x, y_{<t})$ gồm prompt $x$ và tiền tố chuỗi tự sinh $y_{<t}$.
+    \item \textbf{Đầu ra (Output):} Điểm số kỳ vọng vô hướng $V_\psi(s_t) \in \mathbb{R}$.
+    \item \textbf{Vai trò:} Dự báo trước phần thưởng tương lai tại từng token, triệt tiêu phương sai cho Advantage $\hat{A}_t = R_t - V_\psi(s_t)$ để ổn định quá trình học.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: MẠNG CRITIC TRONG PPO
+% ----------------------------------------------------------------------------
+\begin{frame}{Mạng Critic trong PPO}
+  \lead{Ước lượng baseline động tại từng vị trí token để tính Advantage.}
+  \begin{block}{Hàm mất mát của Value Network $V_\psi$}
+    \[
+      \fitmath{%
+      \hat{A}_t = R_t - V_\psi(s_t), \qquad \mathcal{L}_{\text{Critic}}(\psi) = \E_{t} \Big[ \big(R_t - V_\psi(s_t)\big)^2 \Big]
+      }
+    \]
+  \end{block}
+
+  \subhead{Vai trò}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Token-level Baseline:} Dự báo phần thưởng kỳ vọng từ trạng thái $s_t$, giảm mạnh phương sai của $\hat{A}_t$.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
 % SLIDE: PPO-CLIP: KIỂM SOÁT BƯỚC CẬP NHẬT
 % ----------------------------------------------------------------------------
 \begin{frame}{Thuật toán PPO: cơ chế Clipping}
@@ -336,29 +377,6 @@
     \item $\rho_t(\theta)$: Tỷ số đo lường mức thay đổi xác suất giữa chính sách mới và cũ.
     \item Khi $\rho_t(\theta)$ vượt ngoài $[1-\epsilon, 1+\epsilon]$ ($\epsilon = 0.2$), gradient bị triệt tiêu về $0$.
     \item Ngăn ngừa các bước cập nhật quá lớn làm sụp đổ chính sách.
-  \end{itemize}
-  \par\vspace{0pt}
-\end{frame}
-
-% ----------------------------------------------------------------------------
-% SLIDE: MẠNG CRITIC TRONG PPO
-% ----------------------------------------------------------------------------
-\begin{frame}{Mạng Critic trong PPO}
-  \lead{Ước lượng baseline động tại từng vị trí token để tính Advantage.}
-  \begin{block}{Hàm mất mát của Value Network $V_\psi$}
-    \[
-      \fitmath{%
-      \hat{A}_t = R_t - V_\psi(s_t), \qquad \mathcal{L}_{\text{Critic}}(\psi) = \E_{t} \Big[ \big(R_t - V_\psi(s_t)\big)^2 \Big]
-      }
-    \]
-  \end{block}
-
-  \subhead{Vai trò và rào cản tài nguyên}
-  \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item \textbf{Token-level Baseline:} Dự báo phần thưởng kỳ vọng từ trạng thái $s_t$, giảm mạnh phương sai của $\hat{A}_t$.
-    \item \textbf{Gánh nặng tham số:} Mạng $V_\psi$ có cùng quy mô với $\pi_\theta$ (chiếm gấp đôi VRAM GPU).
-    \item \textbf{Sai số xấp xỉ:} $V_\psi$ dự báo lệch khiến tín hiệu $\hat{A}_t$ méo mó, gây cập nhật sai hướng.
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
@@ -410,7 +428,7 @@
           \textbf{Tối ưu hóa PPO}\\[3pt]
           $R_{\text{total}} = r_\phi - \beta \DKL$\\[2pt]
           $\hat{A}_t = R_{\text{total}} - V_\psi(s_t)$\\[3pt]
-          \normalfont\scriptsize Cắt tỉa tỷ số $\clip(\rho_t)$
+          \normalfont\scriptsize Cắt tỉa $\clip(\rho_t)$
         };
 
         \coordinate (bus_p) at (1.8, 0);
@@ -445,9 +463,9 @@
 \begin{frame}{Hạn chế của RLHF + PPO}
   \begin{enumerate}\setlength{\itemsep}{4pt}
     \item \textbf{4-Model Memory Bottleneck:}\\
-      \small Duy trì đồng thời bốn mạng ($\pi_\theta, \pi_{\text{ref}}, r_\phi, V_\psi$) trên GPU, chiếm gấp đôi VRAM.
+      \small Duy trì đồng thời bốn mạng ($\pi_\theta, \pi_{\text{ref}}, r_\phi, V_\psi$) trên GPU.
     \item \textbf{Autoregressive Rollout Bottleneck:}\\
-      \small Sinh mẫu tự hồi quy từng token On-policy chiếm $>70\%$ thời gian tính toán.
+      \small Sinh mẫu tự hồi quy từng token của mô hình Policy.
     \item \textbf{Variance and Approximation Error:}\\
       \small Sai số xấp xỉ từ $r_\phi$ và Critic $V_\psi$ khiến gradient có phương sai lớn và bất ổn định.
   \end{enumerate}
