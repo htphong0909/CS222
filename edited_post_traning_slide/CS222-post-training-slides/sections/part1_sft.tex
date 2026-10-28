@@ -25,25 +25,6 @@
   \par\vspace{0pt}
 \end{frame}
 
-% ----------------------------------------------------------------------------
-% SLIDE: GIỚI HẠN CỦA PRE-TRAINING
-% ----------------------------------------------------------------------------
-\begin{frame}{Giới hạn của Pre-training}
-  \lead{Dự đoán văn bản và giải quyết yêu cầu là hai mục tiêu khác nhau.}
-  \small
-  \begin{itemize}\setlength{\itemsep}{4pt}
-    \item \textbf{Objective Mismatch:}
-      \begin{itemize}\small\setlength{\itemsep}{3pt}
-        \item Đầu vào $x$: \textit{``Giải thích nguyên lý của laser?''}
-        \item Đầu ra Base Model: Sinh tiếp các câu hỏi số 2, số 3 thay vì trả lời.
-      \end{itemize}
-    \item \textbf{Không phân biệt chất lượng dữ liệu:}
-      \begin{itemize}\small\setlength{\itemsep}{3pt}
-        \item Tái tạo cả sai số thực tế, định kiến và nội dung độc hại từ tập dữ liệu web.
-      \end{itemize}
-  \end{itemize}
-  \par\vspace{0pt}
-\end{frame}
 
 % ----------------------------------------------------------------------------
 % SLIDE: MỤC TIÊU CỦA POST-TRAINING

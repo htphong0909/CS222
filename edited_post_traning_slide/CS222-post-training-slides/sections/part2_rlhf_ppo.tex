@@ -3,7 +3,43 @@
 % ============================================================================
 \sectionintro{2}{Alignment với RLHF và PPO}{2022--đầu 2023}{Sở thích cặp, Reward Model, KL regularization và kiến trúc bốn mạng.}
 
-\subsection{2.1. Dữ liệu Đối chiếu Cặp \texorpdfstring{$(y_w, y_l)$}{(y\textunderscore w, y\textunderscore l)} \& Reward Model (\texorpdfstring{$r_\phi$}{r\textunderscore φ})}
+\subsection{2.1. Giới thiệu Học tăng cường (RL) \& Reward Model}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG QUAN HỌC TĂNG CƯỜNG (RL)
+% ----------------------------------------------------------------------------
+\begin{frame}{Tổng quan về Học tăng cường (RL)}
+  \lead{Khung làm việc tương tác giữa tác tử và môi trường (Sutton \& Barto, 2018).}
+  \subhead{Các thành phần cốt lõi của RL trong mô hình ngôn ngữ}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Agent (Tác tử):} Mô hình ngôn ngữ cần tối ưu hóa chính sách $\pi_\theta$.
+    \item \textbf{Environment (Môi trường):} Ngữ cảnh hội thoại nhận phản hồi.
+    \item \textbf{State $s_t$ \& Action $a_t$:} State là prompt và chuỗi token đã sinh $(x, y_{<t})$; Action là token tiếp theo $y_t \sim \pi_\theta(\cdot \mid s_t)$.
+    \item \textbf{Reward (Phần thưởng) $r$:} Điểm số đánh giá chất lượng toàn bộ phản hồi.
+  \end{itemize}
+  \vspace{0.15cm}
+  \textbf{Mục tiêu:} Tối đa hóa kỳ vọng phần thưởng tích lũy $\E_{\tau \sim \pi_\theta} [R(\tau)]$.
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TẠI SAO DÙNG RL SAU SFT
+% ----------------------------------------------------------------------------
+\begin{frame}{Tại sao dùng RL sau SFT?}
+  \lead{Dùng tín hiệu thưởng để chấm điểm và định hướng chất lượng câu trả lời.}
+  \subhead{Động lực áp dụng RL sau khi SFT}
+  \small
+  \begin{itemize}\setlength{\itemsep}{5pt}
+    \item \textbf{Vượt qua giới hạn Teacher Forcing:}\\
+      SFT chỉ học bắt chước từng token độc lập, không đánh giá được tổng thể câu trả lời.
+    \item \textbf{Đánh giá chuỗi tự sinh hoàn chỉnh:}\\
+      RL cho phép mô hình tự sinh trọn vẹn câu trả lời $\hat{y} \sim \pi_\theta$, sau đó nhận điểm thưởng.
+    \item \textbf{Tối ưu hóa trực tiếp theo chất lượng:}\\
+      Thưởng điểm cao ($r > 0$) cho phản hồi hữu ích, phạt điểm thấp ($r < 0$) đối với phản hồi độc hại hoặc sai lệch.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
 
 % ----------------------------------------------------------------------------
 % SLIDE: DỮ LIỆU ĐỐI CHIẾU CẶP
@@ -37,6 +73,22 @@
       Độ đồng thuận thống kê vượt trội; dễ chuẩn hóa trên quy mô dữ liệu lớn.
     \item \textbf{Bổ sung Mẫu âm $y_l$ (Negative Sample):}\\
       Cung cấp ranh giới đối chiếu rõ ràng để triệt tiêu hành vi sai lệch.
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+% ----------------------------------------------------------------------------
+% SLIDE: TỔNG QUAN REWARD MODEL
+% ----------------------------------------------------------------------------
+\begin{frame}{Mô hình Phần thưởng (Reward Model)}
+  \lead{Thước đo tự động hóa sở thích và tiêu chuẩn đánh giá của con người.}
+  \subhead{Cấu trúc và cơ chế hoạt động}
+  \small
+  \begin{itemize}\setlength{\itemsep}{6pt}
+    \item \textbf{Đầu vào (Input):} Cặp gồm câu truy vấn $x$ và câu trả lời hoàn chỉnh $y$.
+    \item \textbf{Đầu ra (Output):} Điểm số vô hướng $r_\phi(x, y) \in \mathbb{R}$ phản ánh độ chính xác và mức ưa thích.
+    \item \textbf{Vai trò cốt lõi:}\\
+      Đóng vai trò hàm mục tiêu tự động (Automated Proxy), thay thế con người liên tục chấm điểm cho hàng triệu phản hồi trong quá trình huấn luyện RL.
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
@@ -127,12 +179,13 @@
     \]
   \end{block}
 
-  \subhead{Đặc tính toán học}
+  \subhead{Ý nghĩa thực tiễn}
   \small
   \begin{itemize}\setlength{\itemsep}{5pt}
-    \item \textbf{Điểm vô hướng tại \texttt{<EOS>}:} $r_\phi(x, y) = W_r^\top h_{\text{EOS}}(x, y) \in \mathbb{R}$.
-    \item \textbf{Bất biến tịnh tiến (Shift Invariance):} Với mọi hàm $C(x)$, phép cộng $\tilde{r} = r + C(x)$ bảo toàn hiệu số và thứ tự ưu tiên:
-      $P_{\tilde{r}}(y_w \succ y_l \mid x) \equiv P_r(y_w \succ y_l \mid x)$.
+    \item \textbf{Chuyển đổi thành phân loại nhị phân:}\\
+      Mô hình hóa xác suất ưu tiên thông qua hàm sigmoid của hiệu số điểm $r_\phi(x, y_w) - r_\phi(x, y_l)$.
+    \item \textbf{Nới rộng khoảng cách chất lượng:}\\
+      Cực đại hóa xác suất giúp nới rộng chênh lệch điểm giữa phản hồi tốt $r_\phi(x, y_w)$ và phản hồi kém $r_\phi(x, y_l)$.
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
@@ -146,13 +199,15 @@
   \lead{Tối đa hóa cực đoan một hàm định giá xấp xỉ sẽ làm suy biến phân phối (Gao et al., 2023).}
   \subhead{Rủi ro khi tối ưu trực tiếp $r_\phi(x, y)$}
   \small
-  \begin{itemize}\setlength{\itemsep}{6pt}
+  \begin{itemize}\setlength{\itemsep}{5pt}
     \item \textbf{Định luật Goodhart:} Thước đo trở thành mục tiêu tối ưu sẽ mất tính tin cậy.
     \item \textbf{Sai số ngoài phân phối (OOD Error):}\\
       $r_\phi$ chỉ tin cậy gần $\pi_{\text{SFT}}$; ra xa vùng huấn luyện, $r_\phi$ cho điểm cao giả tạo.
     \item \textbf{Hiện tượng Reward Hacking:}\\
       Policy sinh văn bản vô nghĩa hoặc lặp từ nhưng vẫn đạt $r_\phi$ cực đại.
   \end{itemize}
+  \vspace{0.20cm}
+  {\small\bfseries\color{reforange}$\implies$ Cần giữ phân phối output model không đi quá xa khỏi model sau SFT.\par}
   \par\vspace{0pt}
 \end{frame}
 
@@ -169,13 +224,17 @@
     \]
   \end{block}
 
-  \subhead{Vai trò của Reference Model $\pi_{\text{ref}}$}
+  \subhead{Ý nghĩa của khoảng cách $\DKL$}
   \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item \textbf{Cố định tham số:} Giữ nguyên trọng số từ $\pi_{\text{SFT}}$ (không cập nhật gradient).
-    \item \textbf{Phạt trôi dạt phân phối:} Ngăn Policy đi quá xa phân phối tự nhiên ban đầu.
-    \item \textbf{Bảo tồn tri thức:} Chống suy sụp entropy (Entropy Collapse) và giữ độ đa dạng.
+  \begin{itemize}\setlength{\itemsep}{4pt}
+    \item $\DKL \to 0$: Phân phối của Policy trùng khớp hoàn toàn với mô hình sau SFT.
+    \item $\DKL \to \infty$: Phân phối Policy trôi dạt quá xa, có nguy cơ suy biến do Reward Hacking.
   \end{itemize}
+  \vspace{0.15cm}
+  \scriptsize\color{refgray}
+  \textbf{Chú thích:}\\
+  $\bullet$ \texttt{model\_ref} ($\pi_{\text{ref}}$): Là mô hình giữ nguyên trọng số sau pha SFT.\\
+  $\bullet$ \texttt{model\_phi} ($\pi_\theta$): Là mô hình đang được huấn luyện.
   \par\vspace{0pt}
 \end{frame}
 
@@ -191,17 +250,6 @@
       }
     \]
   \end{block}
-
-  \subhead{Phần thưởng tổng hợp và hệ số $\beta > 0$}
-  \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item Phần thưởng hiệu dụng: $R_{\text{total}}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}$.
-    \item \textbf{Vai trò hệ số $\beta$:}
-      \begin{itemize}\small\setlength{\itemsep}{2pt}
-        \item $\beta \to 0 \implies$ Suy biến do \textit{Reward Hacking}.
-        \item $\beta \to +\infty \implies$ Policy bị đóng băng ($\pi_\theta \equiv \pi_{\text{ref}}$).
-      \end{itemize}
-  \end{itemize}
   \par\vspace{0pt}
 \end{frame}
 
