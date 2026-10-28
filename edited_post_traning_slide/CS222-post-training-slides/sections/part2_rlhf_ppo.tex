@@ -257,8 +257,8 @@
   \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
   \footnotesize
   \begin{itemize}\setlength{\itemsep}{2pt}
-    \item \textbf{Baseline $b(x)$:} Mốc điểm chuẩn kỳ vọng cho prompt $x$ (ước lượng bởi Critic $V_\psi$), giúp giảm phương sai gradient mà không làm chệch kỳ vọng.
-    \item \textbf{Advantage $A(x, y)$:} Đo lường độ vượt trội so với kỳ vọng ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
+    \item \textbf{Baseline $b(x) = \frac{1}{G}\sum_{i=1}^G R(x, y_i)$:} Điểm trung bình của nhóm $G$ câu trả lời từ prompt $x$, giúp giảm phương sai gradient mà không làm chệch kỳ vọng.
+    \item \textbf{Advantage $A(x, y) = R_{\text{total}} - b(x)$:} Đo mức vượt trội so với kỳ vọng ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
