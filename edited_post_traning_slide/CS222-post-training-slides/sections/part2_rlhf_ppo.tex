@@ -60,19 +60,17 @@
 \end{frame}
 
 % ----------------------------------------------------------------------------
-% SLIDE: TẠI SAO DÙNG RL SAU SFT
+% SLIDE: TỔNG QUAN REWARD MODEL
 % ----------------------------------------------------------------------------
-\begin{frame}{Tại sao dùng RL sau SFT?}
-  \lead{Dùng tín hiệu thưởng để chấm điểm và định hướng chất lượng câu trả lời.}
-  \subhead{Động lực áp dụng RL sau khi SFT}
+\begin{frame}{Mô hình Phần thưởng (Reward Model)}
+  \lead{Thước đo tự động hóa sở thích và tiêu chuẩn đánh giá của con người.}
+  \subhead{Cấu trúc và cơ chế hoạt động}
   \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item \textbf{Vượt qua giới hạn Teacher Forcing:}\\
-      SFT chỉ học bắt chước từng token độc lập, không đánh giá được tổng thể câu trả lời.
-    \item \textbf{Đánh giá chuỗi tự sinh hoàn chỉnh:}\\
-      RL cho phép mô hình tự sinh trọn vẹn câu trả lời $\hat{y} \sim \pi_\theta$, sau đó nhận điểm thưởng.
-    \item \textbf{Tối ưu hóa trực tiếp theo chất lượng:}\\
-      Thưởng điểm cao ($r > 0$) cho phản hồi hữu ích, phạt điểm thấp ($r < 0$) đối với phản hồi độc hại hoặc sai lệch.
+  \begin{itemize}\setlength{\itemsep}{6pt}
+    \item \textbf{Đầu vào (Input):} Cặp gồm câu truy vấn $x$ và câu trả lời hoàn chỉnh $y$.
+    \item \textbf{Đầu ra (Output):} Điểm số vô hướng $r_\phi(x, y) \in \mathbb{R}$ phản ánh độ chính xác và mức ưa thích.
+    \item \textbf{Vai trò cốt lõi:}\\
+      Đóng vai trò hàm mục tiêu tự động (Automated Proxy), thay thế con người liên tục chấm điểm cho hàng triệu phản hồi trong quá trình huấn luyện RL.
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
@@ -81,7 +79,6 @@
 % SLIDE: DỮ LIỆU ĐỐI CHIẾU CẶP
 % ----------------------------------------------------------------------------
 \begin{frame}{Thu thập dữ liệu cặp đối chiếu}
-  \lead{InstructGPT chuyển từ gán nhãn đơn lẻ sang quan hệ thứ tự cặp (Ouyang et al., 2022).}
   \subhead{Quy trình xây dựng tập $\mathcal{D}_{\text{pair}}$}
   \small
   \begin{itemize}\setlength{\itemsep}{6pt}
@@ -104,27 +101,11 @@
   \small
   \begin{itemize}\setlength{\itemsep}{6pt}
     \item \textbf{Hạn chế của thang điểm tuyệt đối ($1\text{--}10$):}\\
-      Phương sai cao giữa các chuyên gia; ngưỡng chấm bị trôi dạt (Calibration Drift) theo thời gian.
+      Phương sai cao giữa các chuyên gia.
     \item \textbf{Tính nhất quán của so sánh nhị phân ($y_w \succ y_l$):}\\
-      Độ đồng thuận thống kê vượt trội; dễ chuẩn hóa trên quy mô dữ liệu lớn.
+      Độ đồng thuận thống kê cao.
     \item \textbf{Bổ sung Mẫu âm $y_l$ (Negative Sample):}\\
       Cung cấp ranh giới đối chiếu rõ ràng để triệt tiêu hành vi sai lệch.
-  \end{itemize}
-  \par\vspace{0pt}
-\end{frame}
-
-% ----------------------------------------------------------------------------
-% SLIDE: TỔNG QUAN REWARD MODEL
-% ----------------------------------------------------------------------------
-\begin{frame}{Mô hình Phần thưởng (Reward Model)}
-  \lead{Thước đo tự động hóa sở thích và tiêu chuẩn đánh giá của con người.}
-  \subhead{Cấu trúc và cơ chế hoạt động}
-  \small
-  \begin{itemize}\setlength{\itemsep}{6pt}
-    \item \textbf{Đầu vào (Input):} Cặp gồm câu truy vấn $x$ và câu trả lời hoàn chỉnh $y$.
-    \item \textbf{Đầu ra (Output):} Điểm số vô hướng $r_\phi(x, y) \in \mathbb{R}$ phản ánh độ chính xác và mức ưa thích.
-    \item \textbf{Vai trò cốt lõi:}\\
-      Đóng vai trò hàm mục tiêu tự động (Automated Proxy), thay thế con người liên tục chấm điểm cho hàng triệu phản hồi trong quá trình huấn luyện RL.
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
@@ -198,14 +179,7 @@
   \small
   \textbf{Nguyên lý:} Cặp $(x, y_w)$ và $(x, y_l)$ cùng đi qua $r_\phi$; gradient kéo tăng $r_\phi(x, y_w)$ ($\uparrow$) và hạ thấp $r_\phi(x, y_l)$ ($\downarrow$).
   \par\vspace{0pt}
-\end{frame}
-
-% ----------------------------------------------------------------------------
-% SLIDE: MÔ HÌNH BRADLEY-TERRY
-% ----------------------------------------------------------------------------
-\begin{frame}{Mô hình Bradley--Terry và Loss}
-  \lead{Maximum Likelihood Estimation cho quan hệ thứ tự cặp.}
-  \begin{block}{Bradley--Terry (1952) và Loss $\mathcal{L}_{\text{RM}}(\phi)$}
+  \begin{block}{Maximum Likelihood Estimation cho quan hệ thứ tự cặp.}
     \small
     \[
       \fitmath{%
@@ -214,25 +188,12 @@
       }
     \]
   \end{block}
-
-  \subhead{Ý nghĩa thực tiễn}
-  \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item \textbf{Chuyển đổi thành phân loại nhị phân:}\\
-      Mô hình hóa xác suất ưu tiên thông qua hàm sigmoid của hiệu số điểm $r_\phi(x, y_w) - r_\phi(x, y_l)$.
-    \item \textbf{Nới rộng khoảng cách chất lượng:}\\
-      Cực đại hóa xác suất giúp nới rộng chênh lệch điểm giữa phản hồi tốt $r_\phi(x, y_w)$ và phản hồi kém $r_\phi(x, y_l)$.
-  \end{itemize}
-  \par\vspace{0pt}
 \end{frame}
-
-\subsection{2.2. Định luật Goodhart, KL regularization (\texorpdfstring{$\beta \DKL$}{β D\textunderscore KL}) \& Chu trình RL}
 
 % ----------------------------------------------------------------------------
 % SLIDE: ĐỊNH LUẬT GOODHART & REWARD HACKING
 % ----------------------------------------------------------------------------
 \begin{frame}{Định luật Goodhart và Reward Hacking}
-  \lead{Tối đa hóa cực đoan một hàm định giá xấp xỉ sẽ làm suy biến phân phối (Gao et al., 2023).}
   \subhead{Rủi ro khi tối ưu trực tiếp $r_\phi(x, y)$}
   \small
   \begin{itemize}\setlength{\itemsep}{5pt}
@@ -243,7 +204,7 @@
       Policy sinh văn bản vô nghĩa hoặc lặp từ nhưng vẫn đạt $r_\phi$ cực đại.
   \end{itemize}
   \vspace{0.20cm}
-  {\small\bfseries\color{reforange}$\implies$ Cần giữ phân phối output model không đi quá xa khỏi model sau SFT.\par}
+  {\small\bfseries\color{reforange}$\implies$ Cần giữ phân phối Policy không đi quá xa khỏi phân phối mô hình sau khi SFT.\par}
   \par\vspace{0pt}
 \end{frame}
 
@@ -279,6 +240,7 @@
 % ----------------------------------------------------------------------------
 \begin{frame}{RLHF Objective}
   \lead{Tối đa hóa phần thưởng kết hợp KL regularization (Ouyang et al., 2022).}
+  \vspace{-0.10cm}
   \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
     \[
       \fitmath{%
@@ -286,6 +248,24 @@
       }
     \]
   \end{block}
+  \vspace{-0.08cm}
+  \begin{block}{Policy Gradient với Advantage $A(x, y)$}
+    \[
+      \fitmath{%
+      \nabla_\theta J(\theta) = \E_{y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
+      }
+    \]
+  \end{block}
+  \vspace{-0.05cm}
+  \subhead{Đặc tính của hàm Baseline $b(x)$}
+  \small
+  \begin{itemize}\setlength{\itemsep}{2pt}
+    \item \textbf{Phân định hướng cập nhật:}
+      \begin{itemize}\small\setlength{\itemsep}{1pt}
+        \item $A(x, y) > 0$: Quỹ đạo tốt hơn kỳ vọng $\longrightarrow$ Tăng xác suất ($\uparrow$).
+        \item $A(x, y) < 0$: Quỹ đạo kém hơn kỳ vọng $\longrightarrow$ Giảm xác suất ($\downarrow$).
+      \end{itemize}
+  \end{itemize}
   \par\vspace{0pt}
 \end{frame}
 
@@ -341,55 +321,6 @@
 \end{frame}
 
 \subsection{2.3. Policy Gradient, Thuật toán PPO (Value Network \texorpdfstring{$V_\psi$}{V\textunderscore ψ}) \& Hệ thống 4 Mô hình}
-
-% ----------------------------------------------------------------------------
-% SLIDE: POLICY GRADIENT CHO SINH CHUỖI NGÔN NGỮ
-% ----------------------------------------------------------------------------
-\begin{frame}{Policy Gradient cho sinh chuỗi ngôn ngữ}
-  \lead{REINFORCE giải quyết bài toán không vi phân qua phép lấy mẫu rời rạc (Williams, 1992).}
-  \begin{block}{Đồng nhất thức Log-derivative Trick}
-    \[
-      \fitmath{%
-      \nabla_\theta J(\theta) = \nabla_\theta \sum_{y} \pi_\theta(y \mid x) R(x, y) = \E_{y \sim \pi_\theta} \Big[ R(x, y) \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
-      }
-    \]
-  \end{block}
-
-  \subhead{Bản chất toán học}
-  \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item Lấy mẫu rời rạc $y \sim \pi_\theta$ không thể truyền gradient trực tiếp: $\frac{\partial y}{\partial \theta}$ không tồn tại.
-    \item Áp dụng $\nabla_\theta \pi_\theta = \pi_\theta \nabla_\theta \log \pi_\theta$, đạo hàm kỳ vọng trở thành kỳ vọng của gradient log-xác suất.
-    \item Cho phép ước lượng Monte Carlo không chệch qua sinh mẫu (Rollout).
-  \end{itemize}
-  \par\vspace{0pt}
-\end{frame}
-
-% ----------------------------------------------------------------------------
-% SLIDE: ADVANTAGE VÀ VAI TRÒ CỦA BASELINE
-% ----------------------------------------------------------------------------
-\begin{frame}{Advantage và vai trò của Baseline}
-  \lead{Trừ hàm baseline $b(x)$ để giảm phương sai mà không gây chệch kỳ vọng.}
-  \begin{block}{Policy Gradient với Advantage $A(x, y)$}
-    \[
-      \fitmath{%
-      \nabla_\theta J(\theta) = \E_{y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
-      }
-    \]
-  \end{block}
-
-  \subhead{Đặc tính của hàm Baseline $b(x)$}
-  \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
-    \item \textbf{Bảo toàn kỳ vọng:} $\E_{y}[b(x) \nabla_\theta \log \pi_\theta] = b(x)\nabla_\theta(1) = 0$.
-    \item \textbf{Phân định hướng cập nhật:}
-      \begin{itemize}\small\setlength{\itemsep}{2pt}
-        \item $A(x, y) > 0$: Quỹ đạo tốt hơn kỳ vọng $\longrightarrow$ Tăng xác suất ($\uparrow$).
-        \item $A(x, y) < 0$: Quỹ đạo kém hơn kỳ vọng $\longrightarrow$ Giảm xác suất ($\downarrow$).
-      \end{itemize}
-  \end{itemize}
-  \par\vspace{0pt}
-\end{frame}
 
 % ----------------------------------------------------------------------------
 % SLIDE: PPO-CLIP: KIỂM SOÁT BƯỚC CẬP NHẬT

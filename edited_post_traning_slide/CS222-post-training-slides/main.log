@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.1) (preloaded format=pdflatex 2026.7.3)  29 OCT 2026 05:05
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.1) (preloaded format=pdflatex 2026.7.3)  29 OCT 2026 05:28
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1573,24 +1573,24 @@ File: t5lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 
 ] [25
 
-] [26
+]) (sections/part3_dpo_variants.tex [26
 
 ] [27
 
 ] [28
 
-] [29
+]
+LaTeX Font Info:    External font `lmex10' loaded for size
+(Font)              <9> on input line 84.
+[29
 
-]) (sections/part3_dpo_variants.tex [30
+] [30
 
 ] [31
 
 ] [32
 
-]
-LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <9> on input line 84.
-[33
+]) (sections/part4_rlvr_grpo.tex [33
 
 ] [34
 
@@ -1598,7 +1598,7 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 
 ] [36
 
-]) (sections/part4_rlvr_grpo.tex [37
+] [37
 
 ] [38
 
@@ -1618,7 +1618,7 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 
 ] [46
 
-] [47
+]) (sections/part5_distillation_summary.tex [47
 
 ] [48
 
@@ -1626,7 +1626,7 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 
 ] [50
 
-]) (sections/part5_distillation_summary.tex [51
+] [51
 
 ] [52
 
@@ -1646,14 +1646,6 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 
 ] [60
 
-] [61
-
-] [62
-
-] [63
-
-] [64
-
 ])
 \tf@nav=\write6
 \openout6 = `main.nav'.
@@ -1670,13 +1662,13 @@ LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: E096EC6AE3A12F375E6F3839285A7F46;7447.
+(rerunfilecheck)             Checksum: 1B26E03B3BBBC9558FE7D12233382E53;6998.
  ) 
 Here is how much of TeX's memory you used:
- 30160 strings out of 467866
- 601447 string characters out of 5418326
- 1014644 words of memory out of 5000000
- 58208 multiletter control sequences out of 15000+600000
+ 30134 strings out of 467866
+ 600984 string characters out of 5418326
+ 1013834 words of memory out of 5000000
+ 58191 multiletter control sequences out of 15000+600000
  814916 words of font info for 146 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  128i,18n,123p,565b,917s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -1709,9 +1701,9 @@ a/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy9.pfb><C:/Users/htpho/AppData
 /Local/Programs/MiKTeX/fonts/type1/public/lm/lmtt10.pfb><C:/Users/htpho/AppData
 /Local/Programs/MiKTeX/fonts/type1/public/lm/lmtt8.pfb><C:/Users/htpho/AppData/
 Local/Programs/MiKTeX/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (64 pages, 924241 bytes).
+Output written on main.pdf (60 pages, 907714 bytes).
 PDF statistics:
- 880 PDF objects out of 1000 (max. 8388607)
- 151 named destinations out of 1000 (max. 500000)
- 939 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 840 PDF objects out of 1000 (max. 8388607)
+ 142 named destinations out of 1000 (max. 500000)
+ 895 words of extra memory for PDF output out of 10000 (max. 10000000)
 
