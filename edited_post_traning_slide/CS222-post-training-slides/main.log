@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.1) (preloaded format=pdflatex 2026.7.3)  29 OCT 2026 05:28
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (MiKTeX 26.1) (preloaded format=pdflatex 2026.7.3)  29 OCT 2026 05:40
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1561,7 +1561,10 @@ File: t5lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 
 ] [19
 
-] [20
+]
+LaTeX Font Info:    External font `lmex10' loaded for size
+(Font)              <9> on input line 264.
+[20
 
 ] [21
 
@@ -1579,10 +1582,7 @@ File: t5lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 
 ] [28
 
-]
-LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <9> on input line 84.
-[29
+] [29
 
 ] [30
 
@@ -1665,11 +1665,11 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 1B26E03B3BBBC9558FE7D12233382E53;6998.
  ) 
 Here is how much of TeX's memory you used:
- 30134 strings out of 467866
- 600984 string characters out of 5418326
- 1013834 words of memory out of 5000000
- 58191 multiletter control sequences out of 15000+600000
- 814916 words of font info for 146 fonts, out of 8000000 for 9000
+ 30136 strings out of 467866
+ 601005 string characters out of 5418326
+ 1013833 words of memory out of 5000000
+ 58192 multiletter control sequences out of 15000+600000
+ 820184 words of font info for 147 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  128i,18n,123p,565b,917s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmbx10.pf
@@ -1677,33 +1677,34 @@ b><C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmbx12.pf
 b><C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmbx6.pfb
 ><C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmbx7.pfb>
 <C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmbx8.pfb><
-C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmex10.pfb><
-C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi10.pfb><
-C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi5.pfb><C
-:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi6.pfb><C:
-/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi7.pfb><C:/
-Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi8.pfb><C:/U
-sers/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi9.pfb><C:/Us
-ers/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr10.pfb><C:/Use
-rs/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr12.pfb><C:/User
-s/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr5.pfb><C:/Users/
-htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr6.pfb><C:/Users/ht
-pho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr7.pfb><C:/Users/htph
-o/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr8.pfb><C:/Users/htpho/
-AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr9.pfb><C:/Users/htpho/Ap
-pData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmri10.pfb><C:/Users/htpho/Ap
-pData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmro8.pfb><C:/Users/htpho/App
-Data/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy10.pfb><C:/Users/htpho/App
-Data/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy6.pfb><C:/Users/htpho/AppD
-ata/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy7.pfb><C:/Users/htpho/AppDa
-ta/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy8.pfb><C:/Users/htpho/AppDat
-a/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy9.pfb><C:/Users/htpho/AppData
-/Local/Programs/MiKTeX/fonts/type1/public/lm/lmtt10.pfb><C:/Users/htpho/AppData
-/Local/Programs/MiKTeX/fonts/type1/public/lm/lmtt8.pfb><C:/Users/htpho/AppData/
-Local/Programs/MiKTeX/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (60 pages, 907714 bytes).
+C:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmbx9.pfb><C
+:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmex10.pfb><C
+:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi10.pfb><C
+:/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi5.pfb><C:
+/Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi6.pfb><C:/
+Users/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi7.pfb><C:/U
+sers/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi8.pfb><C:/Us
+ers/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmmi9.pfb><C:/Use
+rs/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr10.pfb><C:/User
+s/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr12.pfb><C:/Users
+/htpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr5.pfb><C:/Users/h
+tpho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr6.pfb><C:/Users/htp
+ho/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr7.pfb><C:/Users/htpho
+/AppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr8.pfb><C:/Users/htpho/A
+ppData/Local/Programs/MiKTeX/fonts/type1/public/lm/lmr9.pfb><C:/Users/htpho/App
+Data/Local/Programs/MiKTeX/fonts/type1/public/lm/lmri10.pfb><C:/Users/htpho/App
+Data/Local/Programs/MiKTeX/fonts/type1/public/lm/lmro8.pfb><C:/Users/htpho/AppD
+ata/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy10.pfb><C:/Users/htpho/AppD
+ata/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy6.pfb><C:/Users/htpho/AppDa
+ta/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy7.pfb><C:/Users/htpho/AppDat
+a/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy8.pfb><C:/Users/htpho/AppData
+/Local/Programs/MiKTeX/fonts/type1/public/lm/lmsy9.pfb><C:/Users/htpho/AppData/
+Local/Programs/MiKTeX/fonts/type1/public/lm/lmtt10.pfb><C:/Users/htpho/AppData/
+Local/Programs/MiKTeX/fonts/type1/public/lm/lmtt8.pfb><C:/Users/htpho/AppData/L
+ocal/Programs/MiKTeX/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
+Output written on main.pdf (60 pages, 935881 bytes).
 PDF statistics:
- 840 PDF objects out of 1000 (max. 8388607)
+ 845 PDF objects out of 1000 (max. 8388607)
  142 named destinations out of 1000 (max. 500000)
  895 words of extra memory for PDF output out of 10000 (max. 10000000)
 

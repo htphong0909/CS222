@@ -152,8 +152,7 @@
         };
 
         \node[lossbox, text width=3.6cm, minimum height=1.6cm] (btloss) at (17.5, 0) {
-          \textbf{Bradley--Terry Loss}\\[3pt]
-          $\mathcal{L}_{\text{RM}} = -\log \sigma(r_w - r_l)$\\[3pt]
+          \textbf{RM Loss}\\[3pt]
           \normalfont\scriptsize Cực đại hóa hiệu số $r_w - r_l$
         };
 
@@ -176,9 +175,6 @@
     }
   \end{center}
   \vspace{-0.05cm}
-  \small
-  \textbf{Nguyên lý:} Cặp $(x, y_w)$ và $(x, y_l)$ cùng đi qua $r_\phi$; gradient kéo tăng $r_\phi(x, y_w)$ ($\uparrow$) và hạ thấp $r_\phi(x, y_l)$ ($\downarrow$).
-  \par\vspace{0pt}
   \begin{block}{Maximum Likelihood Estimation cho quan hệ thứ tự cặp.}
     \small
     \[
@@ -188,6 +184,9 @@
       }
     \]
   \end{block}
+  \small
+  \textbf{Nguyên lý:} Cặp $(x, y_w)$ và $(x, y_l)$ cùng đi qua $r_\phi$; gradient kéo tăng $r_\phi(x, y_w)$ ($\uparrow$) và hạ thấp $r_\phi(x, y_l)$ ($\downarrow$).
+  \par\vspace{0pt}
 \end{frame}
 
 % ----------------------------------------------------------------------------
@@ -228,10 +227,6 @@
     \item $\DKL \to \infty$: Phân phối Policy trôi dạt quá xa, có nguy cơ suy biến do Reward Hacking.
   \end{itemize}
   \vspace{0.15cm}
-  \scriptsize\color{refgray}
-  \textbf{Chú thích:}\\
-  $\bullet$ \texttt{model\_ref} ($\pi_{\text{ref}}$): Là mô hình giữ nguyên trọng số sau pha SFT.\\
-  $\bullet$ \texttt{model\_phi} ($\pi_\theta$): Là mô hình đang được huấn luyện.
   \par\vspace{0pt}
 \end{frame}
 
@@ -239,8 +234,10 @@
 % SLIDE: RLHF OBJECTIVE
 % ----------------------------------------------------------------------------
 \begin{frame}{RLHF Objective}
+  \setlength{\abovedisplayskip}{2pt}%
+  \setlength{\belowdisplayskip}{2pt}%
   \lead{Tối đa hóa phần thưởng kết hợp KL regularization (Ouyang et al., 2022).}
-  \vspace{-0.10cm}
+  \vspace{-0.15cm}
   \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
     \[
       \fitmath{%
@@ -248,7 +245,7 @@
       }
     \]
   \end{block}
-  \vspace{-0.08cm}
+  \vspace{-0.15cm}
   \begin{block}{Policy Gradient với Advantage $A(x, y)$}
     \[
       \fitmath{%
@@ -256,15 +253,12 @@
       }
     \]
   \end{block}
-  \vspace{-0.05cm}
-  \subhead{Đặc tính của hàm Baseline $b(x)$}
-  \small
+  \vspace{-0.10cm}
+  \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
+  \footnotesize
   \begin{itemize}\setlength{\itemsep}{2pt}
-    \item \textbf{Phân định hướng cập nhật:}
-      \begin{itemize}\small\setlength{\itemsep}{1pt}
-        \item $A(x, y) > 0$: Quỹ đạo tốt hơn kỳ vọng $\longrightarrow$ Tăng xác suất ($\uparrow$).
-        \item $A(x, y) < 0$: Quỹ đạo kém hơn kỳ vọng $\longrightarrow$ Giảm xác suất ($\downarrow$).
-      \end{itemize}
+    \item \textbf{Baseline $b(x)$:} Mốc điểm chuẩn kỳ vọng cho prompt $x$ (ước lượng bởi Critic $V_\psi$), giúp giảm phương sai gradient mà không làm chệch kỳ vọng.
+    \item \textbf{Advantage $A(x, y)$:} Đo lường độ vượt trội so với kỳ vọng ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
