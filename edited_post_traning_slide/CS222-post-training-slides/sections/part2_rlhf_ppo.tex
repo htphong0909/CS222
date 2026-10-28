@@ -315,23 +315,15 @@
 % ----------------------------------------------------------------------------
 % SLIDE: TỔNG QUAN MẠNG CRITIC (VALUE NETWORK)
 % ----------------------------------------------------------------------------
-\begin{frame}{Mạng Critic (Value Network)}
+\begin{frame}{Mạng Critic}
   \lead{Giải quyết bất ổn định do biến động phần thưởng trong huấn luyện RL.}
   \subhead{Động lực ra đời}
   \small
-  \begin{itemize}\setlength{\itemsep}{3pt}
+  \begin{itemize}\setlength{\itemsep}{4pt}
     \item \textbf{Bất ổn định do bùng nổ reward:}\\
       Điểm thưởng $R(x, y)$ có phương sai rất lớn giữa các câu trả lời, làm gradient dao động mạnh và dễ gây sụp đổ chính sách.
     \item \textbf{$\implies$ Cần mạng Critic ($V_\psi$):}\\
       Cần một mạng đo trước điểm số kỳ vọng sẽ nhận được từ trạng thái hiện tại để làm mốc quy chiếu (baseline).
-  \end{itemize}
-
-  \subhead{Cấu trúc và Vai trò}
-  \small
-  \begin{itemize}\setlength{\itemsep}{3pt}
-    \item \textbf{Đầu vào (Input):} Trạng thái $s_t = (x, y_{<t})$ gồm prompt $x$ và tiền tố chuỗi tự sinh $y_{<t}$.
-    \item \textbf{Đầu ra (Output):} Điểm số kỳ vọng vô hướng $V_\psi(s_t) \in \mathbb{R}$.
-    \item \textbf{Vai trò:} Dự báo trước phần thưởng tương lai tại từng token, triệt tiêu phương sai cho Advantage $\hat{A}_t = R_t - V_\psi(s_t)$ để ổn định quá trình học.
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
@@ -340,7 +332,13 @@
 % SLIDE: MẠNG CRITIC TRONG PPO
 % ----------------------------------------------------------------------------
 \begin{frame}{Mạng Critic trong PPO}
-  \lead{Ước lượng baseline động tại từng vị trí token để tính Advantage.}
+  \lead{Ước lượng reward tại từng vị trí token.}
+  \subhead{Cấu trúc}
+  \small
+  \begin{itemize}\setlength{\itemsep}{3pt}
+    \item \textbf{Đầu vào (Input):} Trạng thái $s_t = (x, y_{<t})$ gồm prompt $x$ và tiền tố chuỗi tự sinh $y_{<t}$.
+    \item \textbf{Đầu ra (Output):} Điểm số kỳ vọng vô hướng $V_\psi(s_t) \in \mathbb{R}$.
+  \end{itemize}
   \begin{block}{Hàm mất mát của Value Network $V_\psi$}
     \[
       \fitmath{%
@@ -351,7 +349,7 @@
 
   \subhead{Vai trò}
   \small
-  \begin{itemize}\setlength{\itemsep}{5pt}
+  \begin{itemize}\setlength{\itemsep}{3pt}
     \item \textbf{Token-level Baseline:} Dự báo phần thưởng kỳ vọng từ trạng thái $s_t$, giảm mạnh phương sai của $\hat{A}_t$.
   \end{itemize}
   \par\vspace{0pt}
@@ -445,10 +443,11 @@
         \draw[flow] (bus_r) |- (critic.west);
 
         \draw[flow] (rm.east) -| ([xshift=-0.4cm]ppo.north);
-        \draw[flow] (critic.east) -| ([xshift=-0.4cm]ppo.south);
-        \draw[flow] (ref.south) -- (4.2, -2.45) -- node[below, font=\scriptsize\rmfamily, text=slate] {Truyền $\log \pi_{\text{ref}}(y \mid x)$ để tính phân kỳ $\beta \DKL(\pi_\theta \parallel \pi_{\text{ref}})$} (17.5, -2.45) -- (ppo.south);
+        \draw[flow] (critic.east) -| ([xshift=-0.5cm]ppo.south);
+        \draw[flow] (ref.south) -- (4.2, -2.95) -- node[below=1pt, font=\scriptsize\rmfamily, text=slate] {Truyền $\log \pi_{\text{ref}}(y \mid x)$ để tính phân kỳ $\beta \DKL(\pi_\theta \parallel \pi_{\text{ref}})$} (17.8, -2.95) -- ([xshift=0.3cm]ppo.south);
 
-        \draw[gradflow] (ppo.north) -- (17.5, 2.45) -- node[above, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Cập nhật Gradient PPO đồng thời cho Policy $\pi_\theta$ và Critic $V_\psi$} (4.2, 2.45) -- (actor.north);
+        \draw[gradflow] (ppo.north) -- (17.5, 2.45) -- node[above, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Cập nhật Gradient Policy $\nabla_\theta \mathcal{J}_{\text{PPO}}$} (4.2, 2.45) -- (actor.north);
+        \draw[gradflow] (ppo.south) -- (17.5, -2.35) -- node[below=1pt, font=\scriptsize\rmfamily\bfseries, text=stanfordred] {Cập nhật Gradient Critic $\nabla_\psi \mathcal{L}_{\text{Critic}}$} (12.8, -2.35) -- (critic.south);
       \end{tikzpicture}%
     }
   \end{center}

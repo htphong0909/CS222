@@ -6,32 +6,6 @@
 \subsection{3.1. Từ RLHF Objective đến DPO Loss (Closed-form Solution)}
 
 % ----------------------------------------------------------------------------
-% SLIDE: ĐỘNG CƠ CỦA DPO (05/2023)
-% ----------------------------------------------------------------------------
-\begin{frame}{DPO: tối ưu trực tiếp từ sở thích}
-  \lead{Thay thế vòng lặp RL bốn mô hình bằng closed-form solution giải tích (Rafailov et al., 2023).}
-  \subhead{Quy trình tối ưu hóa trực tiếp}
-  \small
-  \begin{itemize}\setlength{\itemsep}{4pt}
-    \item \textbf{RLHF + PPO (Phần 2):} Cặp $(y_w, y_l) \xrightarrow{\text{Bước 1}} r_\phi(x, y) \xrightarrow{\text{Bước 2}} \pi_\theta(y \mid x)$ (qua Critic $V_\psi$).
-    \item \textbf{DPO (Phần 3):} Biểu diễn giải tích $r(x, y)$ theo Policy $\pi_\theta(y \mid x)$, tối ưu trực tiếp trên cặp $(y_w, y_l)$.
-  \end{itemize}
-
-  \vspace{0.10cm}
-  \small
-  \renewcommand{\arraystretch}{1.15}
-  \begin{tabularx}{\textwidth}{@{}l X X@{}}
-    \toprule
-    \textbf{Tiêu chí} & \textbf{RLHF + PPO (2022)} & \textbf{DPO (2023)} \\
-    \midrule
-    \textbf{Bộ nhớ VRAM} & \textbf{4 mạng:} $\pi_\theta, \pi_{\text{ref}}, r_\phi, V_\psi$ & \textbf{2 mạng:} Chỉ $\pi_\theta$ và $\pi_{\text{ref}}$ \\
-    \textbf{Rollout lúc học} & Bắt buộc ở mọi bước cập nhật & \textbf{Không cần} (Forward song song) \\
-    \bottomrule
-  \end{tabularx}
-  \par\vspace{0pt}
-\end{frame}
-
-% ----------------------------------------------------------------------------
 % SLIDE: TỪ MỤC TIÊU RLHF ĐẾN NGHIỆM ĐÓNG
 % ----------------------------------------------------------------------------
 \begin{frame}{DPO: closed-form solution cho RLHF}
@@ -61,8 +35,7 @@
 % SLIDE: DPO LOSS
 % ----------------------------------------------------------------------------
 \begin{frame}{DPO: khử Partition Function và Loss}
-  \lead{Triệt tiêu đại lượng $Z(x)$ qua hiệu số cặp Bradley--Terry.}
-  \subhead{Khử $Z(x)$ qua hiệu số phần thưởng}
+  \subhead{Khử $Z(x)$ qua hiệu số reward}
   \small
   Khi lấy hiệu số giữa mẫu dương $y_w$ và mẫu âm $y_l$, $\beta \log Z(x)$ \textbf{tự triệt tiêu}:
   \[
@@ -72,8 +45,6 @@
   \]
   \vspace{-0.15cm}
   \begin{block}{DPO Loss}
-    \footnotesize
-    Thay $\pi^*$ bằng mạng tham số $\pi_\theta$, tối ưu Maximum Likelihood trên tập cặp:
     \[
       \fitmath{%
       \mathcal{L}_{\text{DPO}}(\theta) = -\E_{(x, y_w, y_l)} \left[ \log \sigma \left( \beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} \right) \right]
