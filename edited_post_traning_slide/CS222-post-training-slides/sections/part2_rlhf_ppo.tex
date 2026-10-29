@@ -237,7 +237,7 @@
   \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
     \[
       \fitmath{%
-      \max_\theta \; J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \big[ R_{\text{total}}(x, y) \big], \quad \text{với } R_{\text{total}}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \tag{1}
+      \max_\theta \; J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \big[ R_{\text{total}}(x, y) \big], \quad \text{với } R_{\text{total}}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}
       }
     \]
   \end{block}
@@ -245,7 +245,7 @@
   \begin{block}{Policy Gradient với hàm Advantage $A(x, y)$}
     \[
       \fitmath{%
-      \nabla_\theta J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big] \tag{2}
+      \nabla_\theta J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
       }
     \]
   \end{block}
@@ -253,7 +253,7 @@
   \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
   \footnotesize
   \begin{itemize}\setlength{\itemsep}{1pt}
-    \item \textbf{Baseline $b(x)$ trong (2):} Mốc kỳ vọng của prompt $x$ (giúp giảm phương sai gradient mà không gây chệch).
+    \item \textbf{Baseline $b(x)$:} Mốc kỳ vọng của prompt $x$ (giúp giảm phương sai gradient mà không gây chệch).
     \item \textbf{Advantage $A(x, y) = R_{\text{total}} - b(x)$:} Đo mức vượt trội so với mốc $b(x)$ ($A > 0$: tăng $\uparrow$; $A < 0$: ghìm $\downarrow$).
   \end{itemize}
   \par\vspace{0pt}
