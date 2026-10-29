@@ -1,0 +1,89 @@
+\documentclass[11pt,aspectratio=169]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\shorthandoff{"}
+\AtBeginDocument{\shorthandoff{"}}
+\pdfstringdefDisableCommands{\def\\{ }}
+
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsfonts,mathtools,bm}
+\usepackage{booktabs,tabularx,array,multirow}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,backgrounds}
+\input{theme}
+
+\DeclareMathOperator{\sen}{sen}
+\DeclareMathOperator{\tg}{tg}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\DKL}{D_{\mathrm{KL}}}
+\DeclareMathOperator{\clip}{\mathrm{clip}}
+\DeclareMathOperator{\mean}{\mathrm{mean}}
+\DeclareMathOperator{\std}{\mathrm{std}}
+
+\begin{document}
+
+\begin{frame}{Phương án A: Dùng underbrace ở cả hai khối}
+  \setlength{\abovedisplayskip}{2pt}%
+  \setlength{\belowdisplayskip}{2pt}%
+  \lead{Tối đa hóa phần thưởng kết hợp KL regularization (Ouyang et al., 2022).}
+  \vspace{-0.15cm}
+  \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
+    \[
+      \fitmath{%
+      \max_{\theta} \; J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ \underbrace{r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}}_{R_{\text{total}}(x, y) \text{ (Thưởng tổng hợp)}} \Big]
+      }
+    \]
+  \end{block}
+  \vspace{-0.15cm}
+  \begin{block}{Policy Gradient với hàm Advantage $A(x, y)$}
+    \[
+      \fitmath{%
+      \nabla_\theta J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
+      }
+    \]
+  \end{block}
+  \vspace{-0.10cm}
+  \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
+  \footnotesize
+  \begin{itemize}\setlength{\itemsep}{2pt}
+    \item \textbf{Baseline $b(x)$:} Mốc kỳ vọng của prompt $x$ (giúp giảm phương sai gradient mà không gây chệch).
+    \item \textbf{Advantage $A(x, y)$:} Đo mức vượt trội so với mốc $b(x)$ ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+\begin{frame}{Phương án B: Đặt biểu thức rõ ràng}
+  \setlength{\abovedisplayskip}{2pt}%
+  \setlength{\belowdisplayskip}{2pt}%
+  \lead{Tối đa hóa phần thưởng kết hợp KL regularization (Ouyang et al., 2022).}
+  \vspace{-0.15cm}
+  \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
+    \[
+      \fitmath{%
+      \max_{\theta} \; J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \big[ R_{\text{total}}(x, y) \big], \quad \text{với } R_{\text{total}}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}
+      }
+    \]
+  \end{block}
+  \vspace{-0.15cm}
+  \begin{block}{Policy Gradient với hàm Advantage $A(x, y)$}
+    \[
+      \fitmath{%
+      \nabla_\theta J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
+      }
+    \]
+  \end{block}
+  \vspace{-0.10cm}
+  \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
+  \footnotesize
+  \begin{itemize}\setlength{\itemsep}{2pt}
+    \item \textbf{Baseline $b(x)$:} Mốc kỳ vọng của prompt $x$ (giúp giảm phương sai gradient mà không gây chệch).
+    \item \textbf{Advantage $A(x, y)$:} Đo mức vượt trội so với mốc $b(x)$ ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+
+\end{document}

@@ -1,0 +1,67 @@
+\documentclass[11pt,aspectratio=169]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\shorthandoff{"}
+\AtBeginDocument{\shorthandoff{"}}
+\pdfstringdefDisableCommands{\def\\{ }}
+
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsfonts,mathtools,bm}
+\usepackage{booktabs,tabularx,array,multirow}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,backgrounds}
+\input{theme}
+
+\DeclareMathOperator{\sen}{sen}
+\DeclareMathOperator{\tg}{tg}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\DKL}{D_{\mathrm{KL}}}
+\DeclareMathOperator{\clip}{\mathrm{clip}}
+\DeclareMathOperator{\mean}{\mathrm{mean}}
+\DeclareMathOperator{\std}{\mathrm{std}}
+\newcommand{\cancel}[1]{\textcolor{reforange}{\underbrace{#1}_{\text{Triệt tiêu }=0}}}
+
+\title[Post-training of Language Models]{Post-training\\of Language Models}
+\author[Nhóm thực hiện]{%
+  Hà Thanh Phong -- 24520024\\
+  Hà Xuân Thiện -- 24520031\\
+  Trần Quang Trường -- 24521901}
+\institute{University of Information Technology -- VNUHCM}
+\date{\today}
+\bibliographystyle{apalike}
+
+\begin{document}
+\begin{frame}{RLHF Objective}
+  \setlength{\abovedisplayskip}{2pt}%
+  \setlength{\belowdisplayskip}{2pt}%
+  \lead{Tối đa hóa phần thưởng kết hợp KL regularization (Ouyang et al., 2022).}
+  \vspace{-0.15cm}
+  \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
+    \[
+      \fitmath{%
+      \max_\theta \; J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \big[ R_{\text{total}}(x, y) \big], \quad \text{với } R_{\text{total}}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \tag{1}
+      }
+    \]
+  \end{block}
+  \vspace{-0.15cm}
+  \begin{block}{Policy Gradient với hàm Advantage $A(x, y)$}
+    \[
+      \fitmath{%
+      \nabla_\theta J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big] \tag{2}
+      }
+    \]
+  \end{block}
+  \vspace{-0.10cm}
+  \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
+  \footnotesize
+  \begin{itemize}\setlength{\itemsep}{2pt}
+    \item \textbf{Baseline $b(x)$:} Mốc kỳ vọng của prompt $x$ (giúp giảm phương sai gradient mà không gây chệch).
+    \item \textbf{Advantage $A(x, y) = R_{\text{total}} - b(x)$:} Đo mức vượt trội so với mốc $b(x)$ ($A > 0$: tăng $\uparrow$; $A < 0$: giảm $\downarrow$).
+  \end{itemize}
+  \par\vspace{0pt}
+\end{frame}
+\end{document}

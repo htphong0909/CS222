@@ -230,31 +230,31 @@
 % SLIDE: RLHF OBJECTIVE
 % ----------------------------------------------------------------------------
 \begin{frame}{RLHF Objective}
-  \setlength{\abovedisplayskip}{2pt}%
-  \setlength{\belowdisplayskip}{2pt}%
+  \setlength{\abovedisplayskip}{1pt}%
+  \setlength{\belowdisplayskip}{1pt}%
   \lead{Tối đa hóa phần thưởng kết hợp KL regularization (Ouyang et al., 2022).}
-  \vspace{-0.15cm}
+  \vspace{-0.20cm}
   \begin{block}{Mục tiêu RLHF có điều chuẩn KL}
     \[
       \fitmath{%
-      \max_{\pi_\theta} \; J_{\text{RLHF}}(\pi_\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \Big]
+      \max_\theta \; J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \big[ R_{\text{total}}(x, y) \big], \quad \text{với } R_{\text{total}}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \tag{1}
+      }
+    \]
+  \end{block}
+  \vspace{-0.20cm}
+  \begin{block}{Policy Gradient với hàm Advantage $A(x, y)$}
+    \[
+      \fitmath{%
+      \nabla_\theta J_{\text{RLHF}}(\theta) = \E_{x \sim \mathcal{D},\; y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big] \tag{2}
       }
     \]
   \end{block}
   \vspace{-0.15cm}
-  \begin{block}{Policy Gradient với Advantage $A(x, y)$}
-    \[
-      \fitmath{%
-      \nabla_\theta J(\theta) = \E_{y \sim \pi_\theta} \Big[ \underbrace{\big(R_{\text{total}}(x, y) - b(x)\big)}_{\text{Advantage } A(x, y)} \, \nabla_\theta \log \pi_\theta(y \mid x) \Big]
-      }
-    \]
-  \end{block}
-  \vspace{-0.10cm}
   \subhead{Ý nghĩa của Baseline $b(x)$ và Advantage $A(x, y)$}
   \footnotesize
-  \begin{itemize}\setlength{\itemsep}{2pt}
-    \item \textbf{Baseline $b(x)$:} Điểm trung bình cho prompt $x$.
-    \item \textbf{Advantage $A(x, y)$:} ($A > 0$: tăng xác suất $\uparrow$; $A < 0$: ghìm xác suất $\downarrow$).
+  \begin{itemize}\setlength{\itemsep}{1pt}
+    \item \textbf{Baseline $b(x)$ trong (2):} Mốc kỳ vọng của prompt $x$ (giúp giảm phương sai gradient mà không gây chệch).
+    \item \textbf{Advantage $A(x, y) = R_{\text{total}} - b(x)$:} Đo mức vượt trội so với mốc $b(x)$ ($A > 0$: tăng $\uparrow$; $A < 0$: ghìm $\downarrow$).
   \end{itemize}
   \par\vspace{0pt}
 \end{frame}
